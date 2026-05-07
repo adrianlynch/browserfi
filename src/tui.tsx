@@ -8,7 +8,6 @@ import { parse as parseToml } from "smol-toml";
 import type { BundleConfig, Config, LoadedConfig, ResolvedBundle } from "./cli.js";
 
 const browserNames = ["chromium", "chrome", "chrome-canary", "brave", "edge", "firefox"];
-const keyPattern = /^[A-Za-z0-9._-]+$/;
 
 type TuiOptions = {
   configPath?: string;
@@ -52,7 +51,6 @@ type EditField = { key: keyof EditValues; label: string };
 
 const baseFields: EditField[] = [
   { key: "browser", label: "Browser" },
-  { key: "key", label: "Key" },
   { key: "displayName", label: "Display name" },
 ];
 
@@ -139,7 +137,7 @@ function BrowserfiTui({ options, onDone, onError }: { options: TuiOptions; onDon
         const values = editValues(selectedBundle, aerospaceInfo);
         setMode({ type: "edit", originalKey: selectedBundle.key, initialValues: values, values, field: 0, fields, browserOptions: browserOptionsForEdit(browserOptions, selectedBundle.browser), workspaceOptions: aerospaceInfo.workspaces });
       } else if (input === "a") {
-        const values = newAppValues(loaded.config, aerospaceInfo, browserOptions);
+        const values = newAppValues(aerospaceInfo, browserOptions);
         setMode({ type: "edit", initialValues: values, values, field: 0, fields, browserOptions, workspaceOptions: aerospaceInfo.workspaces });
       } else if (input === "b" && selectedBundle) {
         options.createOrUpdateBundle(selectedBundle, true, { quiet: true });
@@ -353,34 +351,28 @@ function editValues(bundle: ResolvedBundle, aerospaceInfo: AerospaceInfo): EditV
   };
 }
 
-function newAppValues(config: Config, aerospaceInfo: AerospaceInfo, browserOptions: string[]): EditValues {
-  const base = "new-app";
-  let key = base;
-  let count = 2;
-  while (config.bundles.some((bundle) => bundle.key === key)) {
-    key = `${base}-${count}`;
-    count += 1;
-  }
+function newAppValues(aerospaceInfo: AerospaceInfo, browserOptions: string[]): EditValues {
   return {
     browser: browserOptions[0] ?? "chromium",
-    key,
+    key: "",
     displayName: "New App",
     workspace: aerospaceInfo.workspaces[0] ?? "",
   };
 }
 
 function saveEdit(options: TuiOptions, loaded: LoadedConfig, originalKey: string | undefined, values: EditValues, workspaceOptions: string[]): void {
-  const keyValidation = validateKey(values.key);
-  if (keyValidation !== true) throw new Error(keyValidation);
   if (!browserNames.includes(values.browser)) throw new Error(`unsupported browser: ${values.browser}`);
   if (workspaceOptions.length > 0 && !workspaceOptions.includes(values.workspace)) throw new Error(`unknown AeroSpace workspace: ${values.workspace}`);
-  const duplicate = loaded.config.bundles.some((bundle) => bundle.key === values.key && bundle.key !== originalKey);
-  if (duplicate) throw new Error(`bundle already exists: ${values.key}`);
+  const displayName = values.displayName.trim();
+  if (!displayName) throw new Error("Display name must not be empty.");
+  const key = originalKey ?? uniqueKeyFromDisplayName(displayName, loaded.config);
+  const duplicate = loaded.config.bundles.some((bundle) => bundle.key === key && bundle.key !== originalKey);
+  if (duplicate) throw new Error(`bundle already exists: ${key}`);
 
   const next: BundleConfig = {
     browser: values.browser as BundleConfig["browser"],
-    key: values.key,
-    displayName: values.displayName || undefined,
+    key,
+    displayName,
     workspace: values.workspace || undefined,
   };
 
@@ -390,7 +382,7 @@ function saveEdit(options: TuiOptions, loaded: LoadedConfig, originalKey: string
     next.id = loaded.config.bundles[index].id ?? originalKey;
     loaded.config.bundles[index] = { ...loaded.config.bundles[index], ...next };
   } else {
-    next.id = values.key;
+    next.id = key;
     loaded.config.bundles.push(next);
   }
 
@@ -417,8 +409,25 @@ function defaultSourceApp(browser: string): string {
   }[browser] ?? "";
 }
 
-function validateKey(value: string): true | string {
-  return keyPattern.test(value) ? true : "Use only letters, numbers, dots, underscores, and hyphens.";
+function uniqueKeyFromDisplayName(displayName: string, config: Config): string {
+  const base = keyFromDisplayName(displayName);
+  let key = base;
+  let count = 2;
+  while (config.bundles.some((bundle) => bundle.key === key)) {
+    key = `${base}-${count}`;
+    count += 1;
+  }
+  return key;
+}
+
+function keyFromDisplayName(displayName: string): string {
+  const key = displayName
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "-")
+    .replace(/^[._-]+|[._-]+$/g, "")
+    .replace(/-{2,}/g, "-");
+  return key || "app";
 }
 
 function confirmDeleteApp(options: TuiOptions, loaded: LoadedConfig, bundle: ResolvedBundle): Mode {
