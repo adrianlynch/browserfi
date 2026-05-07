@@ -343,7 +343,7 @@ function TableBundleRow({ bundle, active, status, showWorkspace, widths }: { bun
       <Text color="gray">│ </Text>
       <Text backgroundColor={rowBackground} color={status === "ok" ? "green" : "yellow"}>{fit(statusLabel, widths[0]).padEnd(widths[0])}</Text>
       <Text backgroundColor={rowBackground}>  </Text>
-      <Text backgroundColor={rowBackground} color={bundle.iconBackgroundColor}>{bundle.iconBackgroundColor ? "●" : " "}</Text>
+      <ColorDot color={bundle.iconBackgroundColor} backgroundColor={rowBackground} blankWhenEmpty />
       <Text backgroundColor={rowBackground}> {fit(bundle.displayName, widths[1] - 2).padEnd(widths[1] - 2)}</Text>
       <Text backgroundColor={rowBackground}>  {fit(bundle.browser, widths[2]).padEnd(widths[2])}</Text>
       {showWorkspace && <Text backgroundColor={rowBackground}>  {fit(bundle.workspace ?? "", widths[3]).padEnd(widths[3])}</Text>}
@@ -425,7 +425,7 @@ function EditForm({ mode, setMode }: { mode: Extract<Mode, { type: "edit" }>; se
 function ColorValue({ value, active = false, suffix = "" }: { value: string; active?: boolean; suffix?: string }) {
   return (
     <Text>
-      <Text color={value || "gray"}>●</Text>
+      <ColorDot color={value} />
       <Text color={active ? "cyan" : undefined}> {value || "default"}{suffix}</Text>
     </Text>
   );
@@ -435,10 +435,23 @@ function PickerColor({ color, selected }: { color: string; selected: boolean }) 
   return (
     <Text>
       <Text color={selected ? "cyan" : "gray"}>{selected ? "› " : "  "}</Text>
-      <Text color={color || "gray"}>●</Text>
+      <ColorDot color={color} />
       <Text color={selected ? "cyan" : undefined}> {color || "default"}</Text>
     </Text>
   );
+}
+
+function ColorDot({ color, backgroundColor, blankWhenEmpty = false }: { color?: string; backgroundColor?: string; blankWhenEmpty?: boolean }) {
+  if (!color) {
+    return <Text backgroundColor={backgroundColor} color="gray">{blankWhenEmpty ? " " : "●"}</Text>;
+  }
+  const normalized = color.toLowerCase();
+  const isWhite = normalized === "#fff" || normalized === "#ffffff" || normalized === "white";
+  const isBlack = normalized === "#000" || normalized === "#000000" || normalized === "#111111" || normalized === "black";
+  if ((!IS_DARK_TERMINAL && isWhite) || (IS_DARK_TERMINAL && isBlack)) {
+    return <Text backgroundColor={backgroundColor} color={IS_DARK_TERMINAL ? "white" : "black"}>○</Text>;
+  }
+  return <Text backgroundColor={backgroundColor} color={color}>●</Text>;
 }
 
 function Footer({ mode, hasAerospace, needsSave, needsBuild, buildProgress, spinner, notice }: { mode: Mode["type"]; hasAerospace?: boolean; needsSave?: boolean; needsBuild?: boolean; buildProgress?: BuildProgress & { name: string }; spinner: string; notice?: string }) {
