@@ -80,6 +80,7 @@ type BundleOperationOptions = { quiet?: boolean; onProgress?: (progress: BuildPr
 const DEFAULT_CONFIG = ".browserfi.toml";
 const KEY_PATTERN = /^[A-Za-z0-9._-]+$/;
 const HEX_COLOR_PATTERN = /^#[0-9A-Fa-f]{6}$/;
+const SVG_ICON_PADDING = 96;
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const AEROSPACE_BEGIN = "# BEGIN browserfi";
 const AEROSPACE_END = "# END browserfi";
@@ -880,16 +881,19 @@ function prepareSvgIcon(src: string, color?: string): { path: string; cleanup: (
   const raw = readFileSync(src, "utf8");
   const next = raw
     .replace(/<svg\b([^>]*)>/i, (_match, attrs: string) => {
-      const viewBox = /\sviewBox\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/i.test(attrs) ? "" : inferredViewBox(attrs);
+      const sourceViewBox = svgViewBox(attrs) ?? inferredViewBox(attrs);
+      const viewBox = sourceViewBox ? ` viewBox="${sourceViewBox.join(" ")}"` : "";
       const withoutInherited = attrs
+        .replace(/\sviewBox\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "")
         .replace(/\swidth\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "")
         .replace(/\sheight\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "")
         .replace(/\scolor\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "")
         .replace(/\sfill\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "")
         .replace(/\sstroke\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "");
       const tint = color ? ` color="${color}" fill="${color}"` : "";
-      return `<svg${withoutInherited}${viewBox} width="1024" height="1024"${tint}>`;
+      return `<svg${withoutInherited}${viewBox} width="1024" height="1024"${tint}><g transform="${svgInsetTransform(sourceViewBox)}">`;
     })
+    .replace(/<\/svg\s*>/i, "</g></svg>")
     .replace(/\sfill\s*=\s*"(?!none\b)[^"]*"/gi, color ? ` fill="${color}"` : "$&")
     .replace(/\sfill\s*=\s*'(?!none\b)[^']*'/gi, color ? ` fill="${color}"` : "$&")
     .replace(/\sstroke\s*=\s*"(?!none\b)[^"]*"/gi, color ? ` stroke="${color}"` : "$&")
@@ -898,10 +902,25 @@ function prepareSvgIcon(src: string, color?: string): { path: string; cleanup: (
   return { path: dest, cleanup: () => rmSync(work, { recursive: true, force: true }) };
 }
 
-function inferredViewBox(svgAttrs: string): string {
+function svgViewBox(svgAttrs: string): [number, number, number, number] | undefined {
+  const match = /\sviewBox\s*=\s*["']?([0-9.\-]+\s+[0-9.\-]+\s+[0-9.]+\s+[0-9.]+)/i.exec(svgAttrs);
+  if (!match) return undefined;
+  const values = match[1].trim().split(/\s+/).map(Number);
+  return values.length === 4 && values.every(Number.isFinite) ? values as [number, number, number, number] : undefined;
+}
+
+function svgInsetTransform(viewBox?: [number, number, number, number]): string {
+  const [minX = 0, minY = 0, width = 1024, height = 1024] = viewBox ?? [];
+  const scale = Math.max(0.1, (1024 - (SVG_ICON_PADDING * 2)) / 1024);
+  const translateX = minX + ((width - (width * scale)) / 2) - (minX * scale);
+  const translateY = minY + ((height - (height * scale)) / 2) - (minY * scale);
+  return `translate(${translateX} ${translateY}) scale(${scale})`;
+}
+
+function inferredViewBox(svgAttrs: string): [number, number, number, number] | undefined {
   const width = numericSvgAttribute(svgAttrs, "width");
   const height = numericSvgAttribute(svgAttrs, "height");
-  return width && height ? ` viewBox="0 0 ${width} ${height}"` : "";
+  return width && height ? [0, 0, Number(width), Number(height)] : undefined;
 }
 
 function numericSvgAttribute(svgAttrs: string, name: string): string | undefined {
