@@ -27,7 +27,7 @@ type AerospaceInfo = {
 
 type Mode =
   | { type: "table" }
-  | { type: "edit"; originalKey?: string; values: EditValues; field: number; fields: EditField[]; browserOptions: string[]; workspaceOptions: string[] }
+  | { type: "edit"; originalKey?: string; values: EditValues; field: number; fields: EditField[]; browserOptions: string[]; workspaceOptions: string[]; picker?: "browser" | "workspace" }
   | { type: "confirm"; message: string; run: () => string };
 
 type EditValues = {
@@ -90,22 +90,28 @@ function BrowserfiTui({ options, onDone, onError }: { options: TuiOptions; onDon
 
       if (mode.type === "edit") {
         if (key.escape) {
-          setMode({ type: "table" });
-        } else if (mode.fields[mode.field]?.key === "browser" && (key.upArrow || key.downArrow || input === "j" || input === "k")) {
+          setMode(mode.picker ? { ...mode, picker: undefined } : { type: "table" });
+        } else if (mode.picker === "browser" && (key.upArrow || key.downArrow || input === "j" || input === "k")) {
           const direction = key.upArrow || input === "k" ? -1 : 1;
           setMode({ ...mode, values: { ...mode.values, browser: nextOption(mode.browserOptions, mode.values.browser, direction) } });
-        } else if (mode.fields[mode.field]?.key === "workspace" && (key.upArrow || key.downArrow || input === "j" || input === "k")) {
+        } else if (mode.picker === "workspace" && (key.upArrow || key.downArrow || input === "j" || input === "k")) {
           const direction = key.upArrow || input === "k" ? -1 : 1;
           setMode({ ...mode, values: { ...mode.values, workspace: nextOption(aerospaceInfo.workspaces, mode.values.workspace, direction) } });
-        } else if (key.tab || key.return) {
-          if (mode.field === mode.fields.length - 1) {
-            saveEdit(options, loaded, mode.originalKey, mode.values, mode.workspaceOptions);
-            setMessage(`updated ${loaded.path}`);
-            reload();
-            setMode({ type: "table" });
-          } else {
-            setMode({ ...mode, field: mode.field + 1 });
-          }
+        } else if (mode.picker && key.return) {
+          setMode({ ...mode, picker: undefined });
+        } else if (key.upArrow || input === "k") {
+          setMode({ ...mode, field: Math.max(0, mode.field - 1), picker: undefined });
+        } else if (key.downArrow || input === "j") {
+          setMode({ ...mode, field: Math.min(mode.fields.length - 1, mode.field + 1), picker: undefined });
+        } else if (key.return && mode.fields[mode.field]?.key === "browser") {
+          setMode({ ...mode, picker: "browser" });
+        } else if (key.return && mode.fields[mode.field]?.key === "workspace") {
+          setMode({ ...mode, picker: "workspace" });
+        } else if (input === "s") {
+          saveEdit(options, loaded, mode.originalKey, mode.values, mode.workspaceOptions);
+          setMessage(`updated ${loaded.path}`);
+          reload();
+          setMode({ type: "table" });
         }
         return;
       }
@@ -218,15 +224,15 @@ function EditForm({ mode, setMode }: { mode: Extract<Mode, { type: "edit" }>; se
               onChange={(value) => setMode({ ...mode, values: { ...mode.values, [field.key]: value } })}
             />
           ) : index === mode.field && item.key === "browser" ? (
-            <Text color="cyan">{mode.values.browser || "-"}</Text>
+            <Text color="cyan">{mode.values.browser || "-"} {mode.picker === "browser" ? "" : "(enter to choose)"}</Text>
           ) : index === mode.field && item.key === "workspace" ? (
-            <Text color="cyan">{mode.values.workspace || "-"}</Text>
+            <Text color="cyan">{mode.values.workspace || "-"} {mode.picker === "workspace" ? "" : "(enter to choose)"}</Text>
           ) : (
             <Text>{mode.values[item.key] || "-"}</Text>
           )}
         </Box>
       ))}
-      {field.key === "workspace" && (
+      {mode.picker === "workspace" && (
         <Box flexDirection="column" marginTop={1}>
           {mode.workspaceOptions.map((workspace) => (
             <Text key={workspace} color={workspace === mode.values.workspace ? "cyan" : "gray"}>
@@ -236,7 +242,7 @@ function EditForm({ mode, setMode }: { mode: Extract<Mode, { type: "edit" }>; se
           ))}
         </Box>
       )}
-      {field.key === "browser" && (
+      {mode.picker === "browser" && (
         <Box flexDirection="column" marginTop={1}>
           {mode.browserOptions.map((browser) => (
             <Text key={browser} color={browser === mode.values.browser ? "cyan" : "gray"}>
@@ -257,7 +263,7 @@ function Footer({ mode, hasAerospace }: { mode: Mode["type"]; hasAerospace?: boo
     return (
       <Box flexDirection="column" marginTop={1}>
         <Text color="gray">{rule}</Text>
-        <Text color="gray">{hasAerospace ? "tab/enter next field • ↑/↓ choose browser/workspace • esc cancel • save on final field" : "tab/enter next field • ↑/↓ choose browser • esc cancel • save on final field"}</Text>
+        <Text color="gray">{hasAerospace ? "↑/↓ move fields • enter choose browser/workspace • s save • esc cancel" : "↑/↓ move fields • enter choose browser • s save • esc cancel"}</Text>
       </Box>
     );
   }
