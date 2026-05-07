@@ -158,16 +158,19 @@ function Table({ bundles, selected }: { bundles: ResolvedBundle[]; selected: num
   const selectedBundle = bundles[selected];
   return (
     <Box flexDirection="column">
-      <Text color="gray">{row(["Stat", "Key", "Browser", "Workspace"], widths)}</Text>
+      <Text color="gray">{tableBorder("top", widths)}</Text>
+      <Text color="gray">{tableRow(["Stat", "Key", "Browser", "Workspace"], widths)}</Text>
+      <Text color="gray">{tableBorder("middle", widths)}</Text>
       {bundles.map((bundle, index) => {
         const active = index === selected;
         const status = existsSync(bundle.appPath) ? "ok" : "miss";
         return (
           <Text key={bundle.key} inverse={active} color={status === "miss" ? "yellow" : undefined}>
-            {row([status, bundle.key, bundle.browser, bundle.workspace ?? ""], widths)}
+            {tableRow([status, bundle.key, bundle.browser, bundle.workspace ?? ""], widths)}
           </Text>
         );
       })}
+      <Text color="gray">{tableBorder("bottom", widths)}</Text>
       {bundles.length === 0 && <Text color="yellow">No bundles configured.</Text>}
       {selectedBundle && (
         <Box flexDirection="column" marginTop={1}>
@@ -232,13 +235,23 @@ function Footer({ mode }: { mode: Mode["type"] }) {
   );
 }
 
-function row(values: string[], widths: number[]): string {
-  return values.map((value, index) => fit(value, widths[index]).padEnd(widths[index])).join("  ").trimEnd();
+function tableRow(values: string[], widths: number[]): string {
+  return `│ ${values.map((value, index) => fit(value, widths[index]).padEnd(widths[index])).join(" │ ")} │`;
+}
+
+function tableBorder(position: "top" | "middle" | "bottom", widths: number[]): string {
+  const chars = {
+    top: ["┌", "┬", "┐"],
+    middle: ["├", "┼", "┤"],
+    bottom: ["└", "┴", "┘"],
+  }[position];
+  return `${chars[0]}${widths.map((width) => "─".repeat(width + 2)).join(chars[1])}${chars[2]}`;
 }
 
 function tableWidths(columns: number): number[] {
-  const fixed = 4 + 2 + 28 + 2 + 8 + 2;
-  const workspace = Math.max(26, columns - fixed);
+  const borderAndPadding = 3 * 4 + 5;
+  const fixedContent = 4 + 28 + 8;
+  const workspace = Math.max(12, columns - borderAndPadding - fixedContent);
   return [4, 28, 8, workspace];
 }
 
