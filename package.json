@@ -14,6 +14,7 @@
   "scripts": {
     "build": "tsc && chmod +x dist/cli.js",
     "check": "tsc --noEmit",
+    "colors": "node scripts/color-samples.mjs",
     "prepack": "npm run build",
     "pack:dry": "npm pack --dry-run"
   },
