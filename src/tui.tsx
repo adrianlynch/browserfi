@@ -15,6 +15,7 @@ const REDRAW_INTERVAL_MS = 2000;
 const SELECTED_ROW_BACKGROUND_LIGHT = "#FFEAF3";
 const SELECTED_ROW_BACKGROUND_DARK = "#5A2438";
 const SELECTED_ROW_BACKGROUND = isDarkTerminal() ? SELECTED_ROW_BACKGROUND_DARK : SELECTED_ROW_BACKGROUND_LIGHT;
+const DETAIL_LABEL_COLOR = isDarkTerminal() ? "#B8B8B8" : "#555555";
 
 type TuiOptions = {
   configPath?: string;
@@ -288,16 +289,26 @@ function Table({ bundles, selected, showWorkspace, bundleNeedsBuild }: { bundles
       {bundles.length === 0 && <Text color="yellow">No bundles configured.</Text>}
       {selectedBundle && (
         <Box flexDirection="column" marginTop={1}>
-          <Text color="gray">Name: {selectedBundle.displayName}</Text>
-          <Text color="gray">App: {selectedBundle.appName}</Text>
-          <Text color="gray">Icon: {selectedBundle.icon ?? "icons/<key>.png|icns"}</Text>
-          <Text color="gray">Icon color: {selectedBundle.iconColor ?? "-"}</Text>
-          <Text color="gray">Icon background: {selectedBundle.iconBackgroundColor ?? "-"}</Text>
-          {showWorkspace && <Text color="gray">Workspace: {selectedBundle.workspace ?? "-"}</Text>}
-          <Text color="gray">Profile: {selectedBundle.profileDir}</Text>
+          <DetailLine label="Name" value={selectedBundle.displayName} />
+          <DetailLine label="App" value={selectedBundle.appName} />
+          <DetailLine label="Icon" value={selectedBundle.icon ?? "icons/<key>.png|icns"} />
+          <DetailLine label="Icon color" value={selectedBundle.iconColor ?? "-"} />
+          <DetailLine label="Icon background" value={selectedBundle.iconBackgroundColor ?? "-"} />
+          {showWorkspace && <DetailLine label="Workspace" value={selectedBundle.workspace ?? "-"} />}
+          <DetailLine label="Profile" value={selectedBundle.profileDir} />
         </Box>
       )}
     </Box>
+  );
+}
+
+function DetailLine({ label, value }: { label: string; value: string }) {
+  return (
+    <Text>
+      <Text color={DETAIL_LABEL_COLOR}>{label}:</Text>
+      {" "}
+      <Text>{value}</Text>
+    </Text>
   );
 }
 
