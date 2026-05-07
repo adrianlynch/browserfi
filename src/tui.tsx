@@ -39,7 +39,7 @@ type Mode =
       fields: EditField[];
       browserOptions: string[];
       workspaceOptions: string[];
-      picker?: "browser" | "workspace" | "iconColor";
+      picker?: "browser" | "workspace" | "iconColor" | "iconBackgroundColor";
     }
   | { type: "confirm"; message: string; run: () => string };
 
@@ -49,6 +49,7 @@ type EditValues = {
   displayName: string;
   icon: string;
   iconColor: string;
+  iconBackgroundColor: string;
   workspace: string;
 };
 
@@ -59,6 +60,7 @@ const baseFields: EditField[] = [
   { key: "displayName", label: "Display name" },
   { key: "icon", label: "Icon" },
   { key: "iconColor", label: "Icon color" },
+  { key: "iconBackgroundColor", label: "Icon background" },
 ];
 
 export function runTui(options: TuiOptions): Promise<void> {
@@ -128,6 +130,9 @@ function BrowserfiTui({ options, onDone, onError }: { options: TuiOptions; onDon
         } else if (mode.picker === "iconColor" && (key.upArrow || key.downArrow || input === "j" || input === "k")) {
           const direction = key.upArrow || input === "k" ? -1 : 1;
           setMode({ ...mode, values: { ...mode.values, iconColor: nextOption(iconColors, mode.values.iconColor, direction) } });
+        } else if (mode.picker === "iconBackgroundColor" && (key.upArrow || key.downArrow || input === "j" || input === "k")) {
+          const direction = key.upArrow || input === "k" ? -1 : 1;
+          setMode({ ...mode, values: { ...mode.values, iconBackgroundColor: nextOption(iconColors, mode.values.iconBackgroundColor, direction) } });
         } else if (mode.picker && key.return) {
           setMode({ ...mode, picker: undefined });
         } else if (key.upArrow || input === "k") {
@@ -140,6 +145,8 @@ function BrowserfiTui({ options, onDone, onError }: { options: TuiOptions; onDon
           setMode({ ...mode, picker: "workspace" });
         } else if (key.return && mode.fields[mode.field]?.key === "iconColor") {
           setMode({ ...mode, picker: "iconColor" });
+        } else if (key.return && mode.fields[mode.field]?.key === "iconBackgroundColor") {
+          setMode({ ...mode, picker: "iconBackgroundColor" });
         } else if (input === "s") {
           saveEdit(options, loaded, mode.originalKey, mode.values, mode.workspaceOptions);
           setMessage(`updated ${loaded.path}`);
@@ -250,6 +257,7 @@ function Table({ bundles, selected, showWorkspace, bundleNeedsBuild }: { bundles
           <Text color="gray">App: {selectedBundle.appName}</Text>
           <Text color="gray">Icon: {selectedBundle.icon ?? "icons/<key>.png|icns"}</Text>
           <Text color="gray">Icon color: {selectedBundle.iconColor ?? "-"}</Text>
+          <Text color="gray">Icon background: {selectedBundle.iconBackgroundColor ?? "-"}</Text>
           {showWorkspace && <Text color="gray">Workspace: {selectedBundle.workspace ?? "-"}</Text>}
           <Text color="gray">Profile: {selectedBundle.profileDir}</Text>
         </Box>
@@ -268,7 +276,7 @@ function EditForm({ mode, setMode }: { mode: Extract<Mode, { type: "edit" }>; se
           <Box width={22}>
             <Text color={index === mode.field ? "cyan" : undefined}>{item.label}</Text>
           </Box>
-          {index === mode.field && item.key !== "workspace" && item.key !== "browser" && item.key !== "iconColor" ? (
+          {index === mode.field && item.key !== "workspace" && item.key !== "browser" && item.key !== "iconColor" && item.key !== "iconBackgroundColor" ? (
             <TextInput
               value={mode.values[item.key]}
               onChange={(value) => setMode({ ...mode, values: { ...mode.values, [field.key]: value } })}
@@ -279,6 +287,8 @@ function EditForm({ mode, setMode }: { mode: Extract<Mode, { type: "edit" }>; se
             <Text color="cyan">{mode.values.workspace || "-"} {mode.picker === "workspace" ? "" : "(enter to choose)"}</Text>
           ) : index === mode.field && item.key === "iconColor" ? (
             <Text color="cyan">{mode.values.iconColor || "default"} {mode.picker === "iconColor" ? "" : "(enter to choose)"}</Text>
+          ) : index === mode.field && item.key === "iconBackgroundColor" ? (
+            <Text color="cyan">{mode.values.iconBackgroundColor || "default"} {mode.picker === "iconBackgroundColor" ? "" : "(enter to choose)"}</Text>
           ) : (
             <Text>{mode.values[item.key] || "-"}</Text>
           )}
@@ -309,6 +319,16 @@ function EditForm({ mode, setMode }: { mode: Extract<Mode, { type: "edit" }>; se
           {iconColors.map((color) => (
             <Text key={color || "default"} color={color || "gray"}>
               {color === mode.values.iconColor ? "› " : "  "}
+              {color || "default"}
+            </Text>
+          ))}
+        </Box>
+      )}
+      {mode.picker === "iconBackgroundColor" && (
+        <Box flexDirection="column" marginTop={1}>
+          {iconColors.map((color) => (
+            <Text key={color || "default"} color={color || "gray"}>
+              {color === mode.values.iconBackgroundColor ? "› " : "  "}
               {color || "default"}
             </Text>
           ))}
@@ -426,6 +446,7 @@ function editValues(bundle: ResolvedBundle, aerospaceInfo: AerospaceInfo): EditV
     displayName: bundle.displayName,
     icon: bundle.icon ?? "",
     iconColor: bundle.iconColor ?? "",
+    iconBackgroundColor: bundle.iconBackgroundColor ?? "",
     workspace: bundle.workspace ?? aerospaceInfo.workspaces[0] ?? "",
   };
 }
@@ -437,6 +458,7 @@ function newAppValues(aerospaceInfo: AerospaceInfo, browserOptions: string[]): E
     displayName: "New App",
     icon: "",
     iconColor: "",
+    iconBackgroundColor: "",
     workspace: aerospaceInfo.workspaces[0] ?? "",
   };
 }
@@ -456,6 +478,7 @@ function saveEdit(options: TuiOptions, loaded: LoadedConfig, originalKey: string
     displayName,
     icon: values.icon.trim() || undefined,
     iconColor: values.iconColor || undefined,
+    iconBackgroundColor: values.iconBackgroundColor || undefined,
     workspace: values.workspace || undefined,
   };
 

@@ -17,6 +17,7 @@ export type BundleConfig = {
   workspace?: string;
   icon?: string;
   iconColor?: string;
+  iconBackgroundColor?: string;
   sourceApp?: string;
   installDir?: string;
   profilesDir?: string;
@@ -58,6 +59,7 @@ export type ResolvedBundle = {
   iconPath?: string;
   iconUrl?: string;
   iconColor?: string;
+  iconBackgroundColor?: string;
   sourceApp: string;
   appName: string;
   appPath: string;
@@ -80,6 +82,7 @@ type BundleOperationOptions = { quiet?: boolean; onProgress?: (progress: BuildPr
 const DEFAULT_CONFIG = ".browserfi.toml";
 const KEY_PATTERN = /^[A-Za-z0-9._-]+$/;
 const HEX_COLOR_PATTERN = /^#[0-9A-Fa-f]{6}$/;
+const SVG_BACKGROUND_PLACEHOLDER = "__BROWSERFI_ICON_BACKGROUND__";
 const SVG_ICON_PADDING = 96;
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const AEROSPACE_BEGIN = "# BEGIN browserfi";
@@ -90,6 +93,7 @@ const BROWSERFI_KEY = "BrowserfiKey";
 const BROWSERFI_CONFIG_PATH = "BrowserfiConfigPath";
 const BROWSERFI_ICON_PATH = "BrowserfiIconPath";
 const BROWSERFI_ICON_COLOR = "BrowserfiIconColor";
+const BROWSERFI_ICON_BACKGROUND_COLOR = "BrowserfiIconBackgroundColor";
 
 export const BROWSERS: Record<BrowserName, BrowserDefinition> = {
   chromium: {
@@ -383,6 +387,7 @@ function toListItem(bundle: ResolvedBundle): Record<string, string | undefined> 
     iconPath: bundle.iconPath,
     iconUrl: bundle.iconUrl,
     iconColor: bundle.iconColor,
+    iconBackgroundColor: bundle.iconBackgroundColor,
     appPath: bundle.appPath,
     profileDir: bundle.profileDir,
     bundleId: bundle.bundleId,
@@ -410,12 +415,13 @@ function printWideTable(bundles: ResolvedBundle[]): void {
     bundle.displayName,
     bundle.icon ?? "",
     bundle.iconColor ?? "",
+    bundle.iconBackgroundColor ?? "",
     bundle.workspace ?? "",
     bundle.bundleId,
     bundle.appPath,
     bundle.profileDir,
   ]);
-  const headers = ["ID", "Key", "Browser", "Name", "Icon", "Icon Color", "Workspace", "Bundle ID", "App Path", "Profile Path"];
+  const headers = ["ID", "Key", "Browser", "Name", "Icon", "Icon Color", "Icon Background", "Workspace", "Bundle ID", "App Path", "Profile Path"];
   printRows(headers, rows);
 }
 
@@ -528,6 +534,7 @@ function resolveBundle(config: Config, entry: BundleConfig, baseDir: string, con
   const iconUrl = entry.icon && isHttpUrl(entry.icon) ? entry.icon : undefined;
   const iconPath = entry.icon && !iconUrl ? resolvePath(entry.icon, baseDir) : undefined;
   const iconColor = entry.iconColor?.trim();
+  const iconBackgroundColor = entry.iconBackgroundColor?.trim();
 
   if (!existsSync(sourceApp)) {
     throw new Error(`source app not found at ${sourceApp}`);
@@ -537,6 +544,9 @@ function resolveBundle(config: Config, entry: BundleConfig, baseDir: string, con
   }
   if (iconColor && !HEX_COLOR_PATTERN.test(iconColor)) {
     throw new Error(`invalid iconColor "${iconColor}". Use a 6-digit hex color like #34CDD7.`);
+  }
+  if (iconBackgroundColor && !HEX_COLOR_PATTERN.test(iconBackgroundColor)) {
+    throw new Error(`invalid iconBackgroundColor "${iconBackgroundColor}". Use a 6-digit hex color like #111111.`);
   }
 
   return {
@@ -550,6 +560,7 @@ function resolveBundle(config: Config, entry: BundleConfig, baseDir: string, con
     iconPath,
     iconUrl,
     iconColor,
+    iconBackgroundColor,
     sourceApp,
     appName,
     appPath: join(installDir, `${appName}.app`),
@@ -573,6 +584,7 @@ function configureBundle(bundle: ResolvedBundle, options: BundleOperationOptions
   plistSetString(plist, BROWSERFI_CONFIG_PATH, bundle.configPath);
   plistSetString(plist, BROWSERFI_ICON_PATH, effectiveIconIdentity(bundle) ?? "");
   plistSetString(plist, BROWSERFI_ICON_COLOR, bundle.iconColor ?? "");
+  plistSetString(plist, BROWSERFI_ICON_BACKGROUND_COLOR, bundle.iconBackgroundColor ?? "");
   plistBuddy(["Delete", ":CFBundleIconName"], plist, { ignoreFailure: true });
 
   const executableDir = join(bundle.appPath, "Contents/MacOS");
@@ -674,6 +686,7 @@ export function bundleNeedsBuild(bundle: ResolvedBundle): boolean {
   if (plistReadString(plist, BROWSERFI_CONFIG_PATH) !== bundle.configPath) return true;
   if (plistReadString(plist, BROWSERFI_ICON_PATH) !== (effectiveIconIdentity(bundle) ?? "")) return true;
   if (plistReadString(plist, BROWSERFI_ICON_COLOR) !== (bundle.iconColor ?? "")) return true;
+  if (plistReadString(plist, BROWSERFI_ICON_BACKGROUND_COLOR) !== (bundle.iconBackgroundColor ?? "")) return true;
   if (plistReadString(plist, "CFBundleIdentifier") !== bundle.bundleId) return true;
   if (plistReadString(plist, "CFBundleName") !== bundle.displayName) return true;
   if (plistReadString(plist, "CFBundleDisplayName") !== bundle.displayName) return true;
@@ -789,7 +802,7 @@ function applyIcon(bundle: ResolvedBundle): boolean {
     }
 
     if (lowerIconPath.endsWith(".svg")) {
-      const svg = prepareSvgIcon(resolved.path, bundle.iconColor);
+      const svg = prepareSvgIcon(resolved.path, bundle.iconColor, bundle.iconBackgroundColor);
       try {
         const png = svgToPng(svg.path);
         try {
@@ -875,7 +888,7 @@ function svgToPng(src: string): { path: string; cleanup: () => void } {
   }
 }
 
-function prepareSvgIcon(src: string, color?: string): { path: string; cleanup: () => void } {
+function prepareSvgIcon(src: string, color?: string, backgroundColor?: string): { path: string; cleanup: () => void } {
   const work = mkdtempSync(join(tmpdir(), "browserfi-color-"));
   const dest = join(work, "icon.svg");
   const raw = readFileSync(src, "utf8");
@@ -891,13 +904,15 @@ function prepareSvgIcon(src: string, color?: string): { path: string; cleanup: (
         .replace(/\sfill\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "")
         .replace(/\sstroke\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "");
       const tint = color ? ` color="${color}" fill="${color}"` : "";
-      return `<svg${withoutInherited}${viewBox} width="1024" height="1024"${tint}><g transform="${svgInsetTransform(sourceViewBox)}">`;
+      const background = backgroundColor ? `<rect x="${sourceViewBox?.[0] ?? 0}" y="${sourceViewBox?.[1] ?? 0}" width="${sourceViewBox?.[2] ?? 1024}" height="${sourceViewBox?.[3] ?? 1024}" fill="none" data-browserfi-background="${SVG_BACKGROUND_PLACEHOLDER}"/>` : "";
+      return `<svg${withoutInherited}${viewBox} width="1024" height="1024"${tint}>${background}<g transform="${svgInsetTransform(sourceViewBox)}">`;
     })
     .replace(/<\/svg\s*>/i, "</g></svg>")
     .replace(/\sfill\s*=\s*"(?!none\b)[^"]*"/gi, color ? ` fill="${color}"` : "$&")
     .replace(/\sfill\s*=\s*'(?!none\b)[^']*'/gi, color ? ` fill="${color}"` : "$&")
     .replace(/\sstroke\s*=\s*"(?!none\b)[^"]*"/gi, color ? ` stroke="${color}"` : "$&")
-    .replace(/\sstroke\s*=\s*'(?!none\b)[^']*'/gi, color ? ` stroke="${color}"` : "$&");
+    .replace(/\sstroke\s*=\s*'(?!none\b)[^']*'/gi, color ? ` stroke="${color}"` : "$&")
+    .replace(`fill="none" data-browserfi-background="${SVG_BACKGROUND_PLACEHOLDER}"`, `fill="${backgroundColor ?? ""}"`);
   writeFileSync(dest, next);
   return { path: dest, cleanup: () => rmSync(work, { recursive: true, force: true }) };
 }
