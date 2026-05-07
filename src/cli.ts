@@ -15,6 +15,7 @@ export type BundleConfig = {
   key: string;
   displayName?: string;
   workspace?: string;
+  icon?: string;
   sourceApp?: string;
   installDir?: string;
   profilesDir?: string;
@@ -52,6 +53,8 @@ export type ResolvedBundle = {
   key: string;
   displayName: string;
   workspace?: string;
+  icon?: string;
+  iconPath?: string;
   sourceApp: string;
   appName: string;
   appPath: string;
@@ -80,6 +83,7 @@ const BROWSERFI_MANAGED = "BrowserfiManaged";
 const BROWSERFI_ID = "BrowserfiId";
 const BROWSERFI_KEY = "BrowserfiKey";
 const BROWSERFI_CONFIG_PATH = "BrowserfiConfigPath";
+const BROWSERFI_ICON_PATH = "BrowserfiIconPath";
 
 export const BROWSERS: Record<BrowserName, BrowserDefinition> = {
   chromium: {
@@ -298,7 +302,7 @@ function build(options: { configPath?: string; force: boolean }): void {
     changed = createOrUpdateBundle(bundle, options.force);
 
     if (applyIcon(bundle)) {
-      console.log(`    applied icon from ${relativePath(join(bundle.iconsDir, `${bundle.key}.*`))}`);
+      console.log(`    applied icon from ${relativePath(effectiveIconPath(bundle) ?? join(bundle.iconsDir, `${bundle.key}.*`))}`);
       iconsChanged = true;
       changed = true;
     }
@@ -369,6 +373,8 @@ function toListItem(bundle: ResolvedBundle): Record<string, string | undefined> 
     key: bundle.key,
     browser: bundle.browser,
     displayName: bundle.displayName,
+    icon: bundle.icon,
+    iconPath: bundle.iconPath,
     appPath: bundle.appPath,
     profileDir: bundle.profileDir,
     bundleId: bundle.bundleId,
@@ -394,12 +400,13 @@ function printWideTable(bundles: ResolvedBundle[]): void {
     bundle.key,
     bundle.browser,
     bundle.displayName,
+    bundle.icon ?? "",
     bundle.workspace ?? "",
     bundle.bundleId,
     bundle.appPath,
     bundle.profileDir,
   ]);
-  const headers = ["ID", "Key", "Browser", "Name", "Workspace", "Bundle ID", "App Path", "Profile Path"];
+  const headers = ["ID", "Key", "Browser", "Name", "Icon", "Workspace", "Bundle ID", "App Path", "Profile Path"];
   printRows(headers, rows);
 }
 
@@ -509,9 +516,13 @@ function resolveBundle(config: Config, entry: BundleConfig, baseDir: string, con
   const displayName = entry.displayName ?? `${titleCase(browserName)} ${entry.key}`;
   const appName = appNameFromDisplayName(displayName);
   const profileDir = join(profilesDir, entry.key);
+  const iconPath = entry.icon ? resolvePath(entry.icon, baseDir) : undefined;
 
   if (!existsSync(sourceApp)) {
     throw new Error(`source app not found at ${sourceApp}`);
+  }
+  if (iconPath && !existsSync(iconPath)) {
+    throw new Error(`icon not found at ${iconPath}`);
   }
 
   return {
@@ -521,6 +532,8 @@ function resolveBundle(config: Config, entry: BundleConfig, baseDir: string, con
     key: entry.key,
     displayName,
     workspace: entry.workspace,
+    icon: entry.icon,
+    iconPath,
     sourceApp,
     appName,
     appPath: join(installDir, `${appName}.app`),
@@ -542,6 +555,7 @@ function configureBundle(bundle: ResolvedBundle, options: BundleOperationOptions
   plistSetString(plist, BROWSERFI_ID, bundle.id);
   plistSetString(plist, BROWSERFI_KEY, bundle.key);
   plistSetString(plist, BROWSERFI_CONFIG_PATH, bundle.configPath);
+  plistSetString(plist, BROWSERFI_ICON_PATH, effectiveIconPath(bundle) ?? "");
   plistBuddy(["Delete", ":CFBundleIconName"], plist, { ignoreFailure: true });
 
   const executableDir = join(bundle.appPath, "Contents/MacOS");
@@ -606,7 +620,7 @@ export async function buildBundle(bundle: ResolvedBundle, force: boolean, option
 
   await reportProgress(options, "Applying icon", 4, total);
   if (applyIcon(bundle)) {
-    log(options, `    applied icon from ${relativePath(join(bundle.iconsDir, `${bundle.key}.*`))}`);
+    log(options, `    applied icon from ${relativePath(effectiveIconPath(bundle) ?? join(bundle.iconsDir, `${bundle.key}.*`))}`);
     changed = true;
   }
 
@@ -641,6 +655,7 @@ export function bundleNeedsBuild(bundle: ResolvedBundle): boolean {
   if (plistReadString(plist, BROWSERFI_MANAGED) !== "true") return true;
   if (plistReadString(plist, BROWSERFI_ID) !== bundle.id) return true;
   if (plistReadString(plist, BROWSERFI_CONFIG_PATH) !== bundle.configPath) return true;
+  if (plistReadString(plist, BROWSERFI_ICON_PATH) !== (effectiveIconPath(bundle) ?? "")) return true;
   if (plistReadString(plist, "CFBundleIdentifier") !== bundle.bundleId) return true;
   if (plistReadString(plist, "CFBundleName") !== bundle.displayName) return true;
   if (plistReadString(plist, "CFBundleDisplayName") !== bundle.displayName) return true;
@@ -738,21 +753,36 @@ function wrapperScript(bundle: ResolvedBundle): string {
 }
 
 function applyIcon(bundle: ResolvedBundle): boolean {
-  const icns = join(bundle.iconsDir, `${bundle.key}.icns`);
-  const png = join(bundle.iconsDir, `${bundle.key}.png`);
+  const iconPath = effectiveIconPath(bundle);
+  if (!iconPath) return false;
+
   const dest = join(bundle.appPath, "Contents/Resources/app.icns");
 
-  if (existsSync(icns)) {
-    cpSync(icns, dest);
+  const lowerIconPath = iconPath.toLowerCase();
+
+  if (lowerIconPath.endsWith(".icns")) {
+    cpSync(iconPath, dest);
     return true;
   }
 
-  if (existsSync(png)) {
-    pngToIcns(png, dest);
+  if (lowerIconPath.endsWith(".png")) {
+    pngToIcns(iconPath, dest);
     return true;
   }
 
-  return false;
+  throw new Error(`unsupported icon type: ${iconPath}. Use .png or .icns.`);
+}
+
+function effectiveIconPath(bundle: ResolvedBundle): string | undefined {
+  if (bundle.iconPath) return bundle.iconPath;
+
+  const icns = join(bundle.iconsDir, `${bundle.key}.icns`);
+  if (existsSync(icns)) return icns;
+
+  const png = join(bundle.iconsDir, `${bundle.key}.png`);
+  if (existsSync(png)) return png;
+
+  return undefined;
 }
 
 function pngToIcns(src: string, dest: string): void {

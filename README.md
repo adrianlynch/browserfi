@@ -102,9 +102,11 @@ The browser field is selected from supported browsers that are installed on the
 machine. In the edit form, use `↑/↓` to move between fields and `enter` to open
 browser/workspace selectors. Press `s` to save. New apps get a filesystem-safe
 `key` generated from the display name; existing apps keep their current key when
-renamed. If AeroSpace config is found, Browserfi shows workspace fields and lets
-you choose from existing AeroSpace workspace names. If AeroSpace is not found,
-workspace fields and AeroSpace actions are hidden.
+renamed. The icon field accepts a `.png` or `.icns` path; leave it blank to use
+the `icons/<key>.png|icns` convention. If AeroSpace config is found, Browserfi
+shows workspace fields and lets you choose from existing AeroSpace workspace
+names. If AeroSpace is not found, workspace fields and AeroSpace actions are
+hidden.
 
 List configured bundles as a table:
 
@@ -169,6 +171,7 @@ Each bundle supports:
 - `key`: stable identifier used for profiles and icons
 - `id`: optional stable app identity; defaults to `key`
 - `displayName`: Finder, Dock, and menu bar name; also used for the `.app` filename
+- `icon`: optional `.png` or `.icns` path for this app
 - `workspace`: optional AeroSpace workspace for printed rules
 - `sourceApp`: optional override for the source `.app`
 - `installDir`, `profilesDir`, `iconsDir`: optional per-bundle path overrides
@@ -185,15 +188,25 @@ Google Chrome, are rejected until the existing app is deleted manually.
 
 ## Custom Icons
 
-Drop a square PNG, ideally `1024x1024`, or a pre-built `.icns` into `icons/`,
-named after the bundle key:
+Set `icon` on a bundle to use a specific PNG or ICNS file:
+
+```toml
+[[bundles]]
+browser = "chromium"
+key = "user-console-monorepo"
+displayName = "User Console Monorepo"
+icon = "./icons/console.icns"
+```
+
+If `icon` is not set, Browserfi looks for a square PNG, ideally `1024x1024`,
+or a pre-built `.icns` in `icons/`, named after the bundle key:
 
 ```text
 icons/<key>.png
 icons/<key>.icns
 ```
 
-`browserfi build` picks them up by convention, converts PNG files to ICNS with
+`browserfi build` picks icons up by explicit path or convention, converts PNG files to ICNS with
 `sips` and `iconutil`, replaces `Contents/Resources/app.icns`, deletes
 `CFBundleIconName` from `Info.plist`, re-signs ad-hoc, and refreshes Launch
 Services.

@@ -46,6 +46,7 @@ type EditValues = {
   browser: string;
   key: string;
   displayName: string;
+  icon: string;
   workspace: string;
 };
 
@@ -54,6 +55,7 @@ type EditField = { key: keyof EditValues; label: string };
 const baseFields: EditField[] = [
   { key: "browser", label: "Browser" },
   { key: "displayName", label: "Display name" },
+  { key: "icon", label: "Icon" },
 ];
 
 export function runTui(options: TuiOptions): Promise<void> {
@@ -238,6 +240,7 @@ function Table({ bundles, selected, showWorkspace, bundleNeedsBuild }: { bundles
         <Box flexDirection="column" marginTop={1}>
           <Text color="gray">Name: {selectedBundle.displayName}</Text>
           <Text color="gray">App: {selectedBundle.appName}</Text>
+          <Text color="gray">Icon: {selectedBundle.icon ?? "icons/<key>.png|icns"}</Text>
           {showWorkspace && <Text color="gray">Workspace: {selectedBundle.workspace ?? "-"}</Text>}
           <Text color="gray">Profile: {selectedBundle.profileDir}</Text>
         </Box>
@@ -400,6 +403,7 @@ function editValues(bundle: ResolvedBundle, aerospaceInfo: AerospaceInfo): EditV
     browser: bundle.browser,
     key: bundle.key,
     displayName: bundle.displayName,
+    icon: bundle.icon ?? "",
     workspace: bundle.workspace ?? aerospaceInfo.workspaces[0] ?? "",
   };
 }
@@ -409,6 +413,7 @@ function newAppValues(aerospaceInfo: AerospaceInfo, browserOptions: string[]): E
     browser: browserOptions[0] ?? "chromium",
     key: "",
     displayName: "New App",
+    icon: "",
     workspace: aerospaceInfo.workspaces[0] ?? "",
   };
 }
@@ -426,6 +431,7 @@ function saveEdit(options: TuiOptions, loaded: LoadedConfig, originalKey: string
     browser: values.browser as BundleConfig["browser"],
     key,
     displayName,
+    icon: values.icon.trim() || undefined,
     workspace: values.workspace || undefined,
   };
 
