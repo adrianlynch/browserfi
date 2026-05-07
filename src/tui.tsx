@@ -80,6 +80,9 @@ const baseFields: EditField[] = [
 export function runTui(options: TuiOptions): Promise<void> {
   return new Promise((resolve, reject) => {
     let clear: () => void = () => undefined;
+    if (process.stdout.isTTY) {
+      process.stdout.write("\u001b[2J\u001b[3J\u001b[H");
+    }
     const instance = render(<BrowserfiTui options={options} onDone={resolve} onError={reject} onRefresh={() => clear()} />);
     clear = instance.clear;
     instance.waitUntilExit().then(() => resolve(), reject);
