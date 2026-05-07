@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import React, { useMemo, useState } from "react";
-import { Box, Text, render, useApp, useInput } from "ink";
+import { Box, Text, render, useApp, useInput, useStdout } from "ink";
 import TextInput from "ink-text-input";
 import type { BundleConfig, Config, LoadedConfig, ResolvedBundle } from "./cli.js";
 
@@ -152,7 +152,8 @@ function Header({ configPath }: { configPath: string }) {
 }
 
 function Table({ bundles, selected }: { bundles: ResolvedBundle[]; selected: number }) {
-  const widths = [4, 28, 8, 26];
+  const { stdout } = useStdout();
+  const widths = tableWidths(stdout.columns ?? 100);
   const selectedBundle = bundles[selected];
   return (
     <Box flexDirection="column">
@@ -171,6 +172,7 @@ function Table({ bundles, selected }: { bundles: ResolvedBundle[]; selected: num
         <Box flexDirection="column" marginTop={1}>
           <Text color="gray">Name: {selectedBundle.displayName}</Text>
           <Text color="gray">App: {selectedBundle.appName}</Text>
+          <Text color="gray">Workspace: {selectedBundle.workspace ?? "-"}</Text>
           <Text color="gray">Profile: {selectedBundle.profileDir}</Text>
         </Box>
       )}
@@ -214,6 +216,12 @@ function Footer({ mode }: { mode: Mode["type"] }) {
 
 function row(values: string[], widths: number[]): string {
   return values.map((value, index) => fit(value, widths[index]).padEnd(widths[index])).join("  ").trimEnd();
+}
+
+function tableWidths(columns: number): number[] {
+  const fixed = 4 + 2 + 28 + 2 + 8 + 2;
+  const workspace = Math.max(26, columns - fixed);
+  return [4, 28, 8, workspace];
 }
 
 function fit(value: string, width: number): string {
