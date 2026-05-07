@@ -2,7 +2,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, cpSync, renameSync, writeFileSync, chmodSync, utimesSync } from "node:fs";
 import { tmpdir, homedir } from "node:os";
-import { dirname, isAbsolute, join, resolve } from "node:path";
+import { basename, dirname, extname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse as parseToml, stringify as stringifyToml } from "smol-toml";
 import { runTui } from "./tui.js";
@@ -55,6 +55,7 @@ export type ResolvedBundle = {
   workspace?: string;
   icon?: string;
   iconPath?: string;
+  iconUrl?: string;
   sourceApp: string;
   appName: string;
   appPath: string;
@@ -302,7 +303,7 @@ function build(options: { configPath?: string; force: boolean }): void {
     changed = createOrUpdateBundle(bundle, options.force);
 
     if (applyIcon(bundle)) {
-      console.log(`    applied icon from ${relativePath(effectiveIconPath(bundle) ?? join(bundle.iconsDir, `${bundle.key}.*`))}`);
+      console.log(`    applied icon from ${relativePath(effectiveIconIdentity(bundle) ?? join(bundle.iconsDir, `${bundle.key}.*`))}`);
       iconsChanged = true;
       changed = true;
     }
@@ -375,6 +376,7 @@ function toListItem(bundle: ResolvedBundle): Record<string, string | undefined> 
     displayName: bundle.displayName,
     icon: bundle.icon,
     iconPath: bundle.iconPath,
+    iconUrl: bundle.iconUrl,
     appPath: bundle.appPath,
     profileDir: bundle.profileDir,
     bundleId: bundle.bundleId,
@@ -516,7 +518,8 @@ function resolveBundle(config: Config, entry: BundleConfig, baseDir: string, con
   const displayName = entry.displayName ?? `${titleCase(browserName)} ${entry.key}`;
   const appName = appNameFromDisplayName(displayName);
   const profileDir = join(profilesDir, entry.key);
-  const iconPath = entry.icon ? resolvePath(entry.icon, baseDir) : undefined;
+  const iconUrl = entry.icon && isHttpUrl(entry.icon) ? entry.icon : undefined;
+  const iconPath = entry.icon && !iconUrl ? resolvePath(entry.icon, baseDir) : undefined;
 
   if (!existsSync(sourceApp)) {
     throw new Error(`source app not found at ${sourceApp}`);
@@ -534,6 +537,7 @@ function resolveBundle(config: Config, entry: BundleConfig, baseDir: string, con
     workspace: entry.workspace,
     icon: entry.icon,
     iconPath,
+    iconUrl,
     sourceApp,
     appName,
     appPath: join(installDir, `${appName}.app`),
@@ -555,7 +559,7 @@ function configureBundle(bundle: ResolvedBundle, options: BundleOperationOptions
   plistSetString(plist, BROWSERFI_ID, bundle.id);
   plistSetString(plist, BROWSERFI_KEY, bundle.key);
   plistSetString(plist, BROWSERFI_CONFIG_PATH, bundle.configPath);
-  plistSetString(plist, BROWSERFI_ICON_PATH, effectiveIconPath(bundle) ?? "");
+  plistSetString(plist, BROWSERFI_ICON_PATH, effectiveIconIdentity(bundle) ?? "");
   plistBuddy(["Delete", ":CFBundleIconName"], plist, { ignoreFailure: true });
 
   const executableDir = join(bundle.appPath, "Contents/MacOS");
@@ -620,7 +624,7 @@ export async function buildBundle(bundle: ResolvedBundle, force: boolean, option
 
   await reportProgress(options, "Applying icon", 4, total);
   if (applyIcon(bundle)) {
-    log(options, `    applied icon from ${relativePath(effectiveIconPath(bundle) ?? join(bundle.iconsDir, `${bundle.key}.*`))}`);
+    log(options, `    applied icon from ${relativePath(effectiveIconIdentity(bundle) ?? join(bundle.iconsDir, `${bundle.key}.*`))}`);
     changed = true;
   }
 
@@ -655,7 +659,7 @@ export function bundleNeedsBuild(bundle: ResolvedBundle): boolean {
   if (plistReadString(plist, BROWSERFI_MANAGED) !== "true") return true;
   if (plistReadString(plist, BROWSERFI_ID) !== bundle.id) return true;
   if (plistReadString(plist, BROWSERFI_CONFIG_PATH) !== bundle.configPath) return true;
-  if (plistReadString(plist, BROWSERFI_ICON_PATH) !== (effectiveIconPath(bundle) ?? "")) return true;
+  if (plistReadString(plist, BROWSERFI_ICON_PATH) !== (effectiveIconIdentity(bundle) ?? "")) return true;
   if (plistReadString(plist, "CFBundleIdentifier") !== bundle.bundleId) return true;
   if (plistReadString(plist, "CFBundleName") !== bundle.displayName) return true;
   if (plistReadString(plist, "CFBundleDisplayName") !== bundle.displayName) return true;
@@ -753,27 +757,60 @@ function wrapperScript(bundle: ResolvedBundle): string {
 }
 
 function applyIcon(bundle: ResolvedBundle): boolean {
-  const iconPath = effectiveIconPath(bundle);
-  if (!iconPath) return false;
+  const resolved = resolveIconFile(bundle);
+  if (!resolved) return false;
 
   const dest = join(bundle.appPath, "Contents/Resources/app.icns");
+  try {
+    const lowerIconPath = resolved.path.toLowerCase();
 
-  const lowerIconPath = iconPath.toLowerCase();
+    if (lowerIconPath.endsWith(".icns")) {
+      cpSync(resolved.path, dest);
+      return true;
+    }
 
-  if (lowerIconPath.endsWith(".icns")) {
-    cpSync(iconPath, dest);
-    return true;
+    if (lowerIconPath.endsWith(".png")) {
+      pngToIcns(resolved.path, dest);
+      return true;
+    }
+
+    if (lowerIconPath.endsWith(".svg")) {
+      const png = svgToPng(resolved.path);
+      try {
+        pngToIcns(png.path, dest);
+      } finally {
+        png.cleanup();
+      }
+      return true;
+    }
+
+    throw new Error(`unsupported icon type: ${resolved.source}. Use .svg, .png, or .icns.`);
+  } finally {
+    resolved.cleanup?.();
   }
-
-  if (lowerIconPath.endsWith(".png")) {
-    pngToIcns(iconPath, dest);
-    return true;
-  }
-
-  throw new Error(`unsupported icon type: ${iconPath}. Use .png or .icns.`);
 }
 
-function effectiveIconPath(bundle: ResolvedBundle): string | undefined {
+type ResolvedIconFile = {
+  path: string;
+  source: string;
+  cleanup?: () => void;
+};
+
+function resolveIconFile(bundle: ResolvedBundle): ResolvedIconFile | undefined {
+  if (bundle.iconUrl) return downloadIcon(bundle.iconUrl);
+  if (bundle.iconPath) return { path: bundle.iconPath, source: bundle.iconPath };
+
+  const icns = join(bundle.iconsDir, `${bundle.key}.icns`);
+  if (existsSync(icns)) return { path: icns, source: icns };
+
+  const png = join(bundle.iconsDir, `${bundle.key}.png`);
+  if (existsSync(png)) return { path: png, source: png };
+
+  return undefined;
+}
+
+function effectiveIconIdentity(bundle: ResolvedBundle): string | undefined {
+  if (bundle.iconUrl) return bundle.iconUrl;
   if (bundle.iconPath) return bundle.iconPath;
 
   const icns = join(bundle.iconsDir, `${bundle.key}.icns`);
@@ -783,6 +820,40 @@ function effectiveIconPath(bundle: ResolvedBundle): string | undefined {
   if (existsSync(png)) return png;
 
   return undefined;
+}
+
+function downloadIcon(url: string): ResolvedIconFile {
+  const extension = iconExtensionFromUrl(url);
+  const work = mkdtempSync(join(tmpdir(), "browserfi-icon-"));
+  const path = join(work, `icon${extension}`);
+  try {
+    run("curl", ["-fsSL", url, "-o", path], { quiet: true });
+    return { path, source: url, cleanup: () => rmSync(work, { recursive: true, force: true }) };
+  } catch (error) {
+    rmSync(work, { recursive: true, force: true });
+    throw error;
+  }
+}
+
+function iconExtensionFromUrl(url: string): ".svg" | ".png" | ".icns" {
+  const extension = extname(new URL(url).pathname).toLowerCase();
+  if (extension === ".svg" || extension === ".png" || extension === ".icns") return extension;
+  throw new Error(`unsupported icon URL type: ${url}. Use a .svg, .png, or .icns URL.`);
+}
+
+function svgToPng(src: string): { path: string; cleanup: () => void } {
+  const work = mkdtempSync(join(tmpdir(), "browserfi-svg-"));
+  try {
+    run("qlmanage", ["-t", "-s", "1024", "-o", work, src], { quiet: true });
+    const generated = join(work, `${basename(src)}.png`);
+    if (!existsSync(generated)) {
+      throw new Error("SVG icon conversion failed. qlmanage did not create a PNG thumbnail.");
+    }
+    return { path: generated, cleanup: () => rmSync(work, { recursive: true, force: true }) };
+  } catch (error) {
+    rmSync(work, { recursive: true, force: true });
+    throw error;
+  }
 }
 
 function pngToIcns(src: string, dest: string): void {
@@ -916,6 +987,15 @@ function run(command: string, args: string[], options: { ignoreFailure?: boolean
     if (!options.ignoreFailure) {
       throw error;
     }
+  }
+}
+
+function isHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
   }
 }
 
