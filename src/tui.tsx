@@ -300,6 +300,7 @@ function Table({ bundles, selected, showWorkspace, bundleNeedsBuild }: { bundles
     <Box flexDirection="column">
       <Text color="gray">{tableBorder("top", widths)}</Text>
       <Text color="gray">{tableRow(showWorkspace ? ["Status", "  Name", "Browser", "Workspace"] : ["Status", "  Name", "Browser"], widths)}</Text>
+      <Text color="gray">{tableRow(showWorkspace ? ["", "", "", ""] : ["", "", ""], widths)}</Text>
       {bundles.map((bundle, index) => {
         const active = index === selected;
         const status = bundleNeedsBuild(bundle) ? "build" : "ok";
