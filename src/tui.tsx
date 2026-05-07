@@ -331,11 +331,11 @@ function Table({ bundles, selected, showWorkspace, bundleNeedsBuild, theme }: { 
       {selectedBundle && (
         <Box flexDirection="column" marginTop={1}>
           <DetailLine label="Name" value={selectedBundle.displayName} theme={theme} />
+          <DetailLine label="Profile" value={selectedBundle.profileDir} theme={theme} />
           <DetailLine label="Icon" value={selectedBundle.icon ?? "icons/<key>.png|icns"} theme={theme} />
           <DetailLine label="Icon color" value={selectedBundle.iconColor ?? "-"} colorValue={selectedBundle.iconColor} theme={theme} />
           <DetailLine label="Icon background" value={selectedBundle.iconBackgroundColor ?? "-"} colorValue={selectedBundle.iconBackgroundColor} theme={theme} />
           {showWorkspace && <DetailLine label="Workspace" value={selectedBundle.workspace ?? "-"} theme={theme} />}
-          <DetailLine label="Profile" value={selectedBundle.profileDir} theme={theme} />
         </Box>
       )}
     </Box>
