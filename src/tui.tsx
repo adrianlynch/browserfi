@@ -1,4 +1,3 @@
-import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -14,8 +13,9 @@ const iconColors = ["", "#34CDD7", "#FFB000", "#FF5C8A", "#7C5CFF", "#2ECC71", "
 const REDRAW_INTERVAL_MS = 2000;
 const SELECTED_ROW_BACKGROUND_LIGHT = "#FFEAF3";
 const SELECTED_ROW_BACKGROUND_DARK = "#5A2438";
-const SELECTED_ROW_BACKGROUND = isDarkTerminal() ? SELECTED_ROW_BACKGROUND_DARK : SELECTED_ROW_BACKGROUND_LIGHT;
-const DETAIL_LABEL_COLOR = isDarkTerminal() ? "#B8B8B8" : "#555555";
+const IS_DARK_TERMINAL = isDarkTerminal();
+const SELECTED_ROW_BACKGROUND = IS_DARK_TERMINAL ? SELECTED_ROW_BACKGROUND_DARK : SELECTED_ROW_BACKGROUND_LIGHT;
+const DETAIL_LABEL_COLOR = IS_DARK_TERMINAL ? "#D0D0D0" : "#222222";
 
 type TuiOptions = {
   configPath?: string;
@@ -250,12 +250,7 @@ function isDarkTerminal(): boolean {
   if (background && /^\d+$/.test(background)) {
     return Number(background) < 8;
   }
-
-  try {
-    return execFileSync("defaults", ["read", "-g", "AppleInterfaceStyle"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim() === "Dark";
-  } catch {
-    return false;
-  }
+  return false;
 }
 
 function Header({ configPath, redrawToken }: { configPath: string; redrawToken: number }) {
