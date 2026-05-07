@@ -510,9 +510,9 @@ function resolveBundle(config: Config, entry: BundleConfig, baseDir: string): Re
 function configureBundle(bundle: ResolvedBundle): void {
   console.log("    setting bundle id and display name");
   const plist = join(bundle.appPath, "Contents/Info.plist");
-  plistBuddy(["Set", ":CFBundleIdentifier", bundle.bundleId], plist);
-  plistBuddy(["Set", ":CFBundleName", bundle.displayName], plist);
-  plistBuddy(["Set", ":CFBundleDisplayName", bundle.displayName], plist);
+  plistSetString(plist, "CFBundleIdentifier", bundle.bundleId);
+  plistSetString(plist, "CFBundleName", bundle.displayName);
+  plistSetString(plist, "CFBundleDisplayName", bundle.displayName);
   plistBuddy(["Delete", ":CFBundleIconName"], plist, { ignoreFailure: true });
 
   const executableDir = join(bundle.appPath, "Contents/MacOS");
@@ -619,8 +619,21 @@ function pngToIcns(src: string, dest: string): void {
   }
 }
 
-function plistBuddy(command: string[], plist: string, options: { ignoreFailure?: boolean } = {}): void {
+function plistBuddy(command: string[], plist: string, options: { ignoreFailure?: boolean; quiet?: boolean } = {}): void {
   run("/usr/libexec/PlistBuddy", ["-c", command.join(" "), plist], options);
+}
+
+function plistSetString(plist: string, key: string, value: string): void {
+  const quotedValue = plistQuote(value);
+  try {
+    plistBuddy(["Set", `:${key}`, quotedValue], plist, { quiet: true });
+  } catch {
+    plistBuddy(["Add", `:${key}`, "string", quotedValue], plist);
+  }
+}
+
+function plistQuote(value: string): string {
+  return `"${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
 }
 
 function refreshLaunchServices(appPath: string): void {
