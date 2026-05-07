@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import React, { useEffect, useMemo, useState } from "react";
-import { Box, Text, render, useApp, useInput, useStdout } from "ink";
+import { Box, Text, render, useApp, useInput, useWindowSize } from "ink";
 import TextInput from "ink-text-input";
 import { parse as parseToml } from "smol-toml";
 import type { BuildProgress, BundleConfig, Config, LoadedConfig, ResolvedBundle } from "./cli.js";
@@ -232,8 +232,8 @@ function Header({ configPath }: { configPath: string }) {
 }
 
 function Table({ bundles, selected, showWorkspace, bundleNeedsBuild }: { bundles: ResolvedBundle[]; selected: number; showWorkspace: boolean; bundleNeedsBuild: (bundle: ResolvedBundle) => boolean }) {
-  const { stdout } = useStdout();
-  const widths = tableWidths(stdout.columns ?? 100, showWorkspace);
+  const { columns } = useWindowSize();
+  const widths = tableWidths(columns || 100, showWorkspace);
   const selectedBundle = bundles[selected];
   return (
     <Box flexDirection="column">
@@ -338,8 +338,8 @@ function EditForm({ mode, setMode }: { mode: Extract<Mode, { type: "edit" }>; se
 }
 
 function Footer({ mode, hasAerospace, needsSave, needsBuild, buildProgress, spinner, notice }: { mode: Mode["type"]; hasAerospace?: boolean; needsSave?: boolean; needsBuild?: boolean; buildProgress?: BuildProgress & { name: string }; spinner: string; notice?: string }) {
-  const { stdout } = useStdout();
-  const rule = "─".repeat(Math.max(20, stdout.columns ?? 80));
+  const { columns } = useWindowSize();
+  const rule = "─".repeat(Math.max(20, columns || 80));
   if (mode === "edit") {
     return (
       <Box flexDirection="column" marginTop={1}>
