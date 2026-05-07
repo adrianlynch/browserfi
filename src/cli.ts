@@ -879,14 +879,17 @@ function colorizeSvg(src: string, color: string): { path: string; cleanup: () =>
   const dest = join(work, "icon.svg");
   const raw = readFileSync(src, "utf8");
   const next = raw
-    .replace(/\sfill="(?!none\b)[^"]*"/gi, ` fill="${color}"`)
-    .replace(/\sstroke="(?!none\b)[^"]*"/gi, ` stroke="${color}"`)
     .replace(/<svg\b([^>]*)>/i, (_match, attrs: string) => {
       const withoutInherited = attrs
-        .replace(/\scolor="[^"]*"/gi, "")
-        .replace(/\sfill="(?!none\b)[^"]*"/gi, "");
+        .replace(/\scolor\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+        .replace(/\sfill\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+        .replace(/\sstroke\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "");
       return `<svg${withoutInherited} color="${color}" fill="${color}">`;
-    });
+    })
+    .replace(/\sfill\s*=\s*"(?!none\b)[^"]*"/gi, ` fill="${color}"`)
+    .replace(/\sfill\s*=\s*'(?!none\b)[^']*'/gi, ` fill="${color}"`)
+    .replace(/\sstroke\s*=\s*"(?!none\b)[^"]*"/gi, ` stroke="${color}"`)
+    .replace(/\sstroke\s*=\s*'(?!none\b)[^']*'/gi, ` stroke="${color}"`);
   writeFileSync(dest, next);
   return { path: dest, cleanup: () => rmSync(work, { recursive: true, force: true }) };
 }
