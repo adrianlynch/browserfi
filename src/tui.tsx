@@ -14,6 +14,9 @@ const iconColors = ["", "#34CDD7", "#FFB000", "#FF5C8A", "#7C5CFF", "#2ECC71", "
 const REDRAW_INTERVAL_MS = 2000;
 const SELECTED_ROW_BACKGROUND_LIGHT = "#FFEAF3";
 const SELECTED_ROW_BACKGROUND_DARK = "#5A2438";
+const TABLE_PADDING_X = 2;
+const EDIT_PADDING_X = 2;
+const EDIT_LABEL_WIDTH = 22;
 
 type TuiOptions = {
   configPath?: string;
@@ -322,6 +325,7 @@ function Table({ bundles, selected, showWorkspace, bundleNeedsBuild, theme }: { 
           <TableBundleRow key={bundle.key} bundle={bundle} active={active} status={status} showWorkspace={showWorkspace} widths={widths} theme={theme} />
         );
       })}
+      <Text color="gray">{tableRow(showWorkspace ? ["", "", "", ""] : ["", "", ""], widths)}</Text>
       <Text color="gray">{tableBorder("bottom", widths)}</Text>
       {bundles.length === 0 && <Text color="yellow">No bundles configured.</Text>}
       {selectedBundle && (
@@ -354,27 +358,29 @@ function TableBundleRow({ bundle, active, status, showWorkspace, widths, theme }
   const rowBackground = active ? theme.selectedRowBackground : undefined;
   return (
     <Text>
-      <Text color="gray">│ </Text>
+      <Text color="gray">│{" ".repeat(TABLE_PADDING_X)}</Text>
       <Text backgroundColor={rowBackground} color={status === "ok" ? "green" : "yellow"}>{fit(statusLabel, widths[0]).padEnd(widths[0])}</Text>
       <Text backgroundColor={rowBackground}>  </Text>
       <ColorDot color={bundle.iconBackgroundColor} backgroundColor={rowBackground} blankWhenEmpty theme={theme} />
       <Text backgroundColor={rowBackground}> {fit(bundle.displayName, widths[1] - 2).padEnd(widths[1] - 2)}</Text>
       <Text backgroundColor={rowBackground}>  {fit(bundle.browser, widths[2]).padEnd(widths[2])}</Text>
       {showWorkspace && <Text backgroundColor={rowBackground}>  {fit(bundle.workspace ?? "", widths[3]).padEnd(widths[3])}</Text>}
-      <Text color="gray"> │</Text>
+      <Text color="gray">{" ".repeat(TABLE_PADDING_X)}│</Text>
     </Text>
   );
 }
 
 function EditForm({ mode, setMode, theme }: { mode: Extract<Mode, { type: "edit" }>; setMode: (mode: Mode) => void; theme: TuiTheme }) {
+  const { columns } = useWindowSize();
   const field = mode.fields[mode.field];
+  const valueWidth = Math.max(12, (columns || 80) - 2 - (EDIT_PADDING_X * 2) - EDIT_LABEL_WIDTH);
   return (
     <Box flexDirection="column">
       <Text bold>{mode.originalKey ? `Edit ${mode.originalKey}` : "Add new app"}</Text>
-      <Box borderStyle="round" borderColor="gray" flexDirection="column" paddingX={1}>
+      <Box borderStyle="round" borderColor="gray" flexDirection="column" paddingX={EDIT_PADDING_X} paddingBottom={1}>
         {mode.fields.map((item, index) => (
           <Box key={item.key}>
-            <Box width={22}>
+            <Box width={EDIT_LABEL_WIDTH}>
               <Text color={index === mode.field ? "cyan" : undefined}>{item.label}</Text>
             </Box>
             {index === mode.field && item.key !== "workspace" && item.key !== "browser" && item.key !== "iconColor" && item.key !== "iconBackgroundColor" ? (
@@ -393,7 +399,7 @@ function EditForm({ mode, setMode, theme }: { mode: Extract<Mode, { type: "edit"
             ) : item.key === "iconColor" || item.key === "iconBackgroundColor" ? (
               <ColorValue value={mode.values[item.key]} theme={theme} />
             ) : (
-              <Text>{mode.values[item.key] || "-"}</Text>
+              <Text>{fit(mode.values[item.key] || "-", valueWidth)}</Text>
             )}
           </Box>
         ))}
@@ -524,7 +530,8 @@ function BuildProgress({ progress, spinner }: { progress: BuildProgress & { name
 }
 
 function tableRow(values: string[], widths: number[]): string {
-  return `│ ${values.map((value, index) => fit(value, widths[index]).padEnd(widths[index])).join("  ")} │`;
+  const padding = " ".repeat(TABLE_PADDING_X);
+  return `│${padding}${values.map((value, index) => fit(value, widths[index]).padEnd(widths[index])).join("  ")}${padding}│`;
 }
 
 function tableBorder(position: "top" | "bottom", widths: number[]): string {
@@ -532,7 +539,7 @@ function tableBorder(position: "top" | "bottom", widths: number[]): string {
     top: ["╭", "╮"],
     bottom: ["╰", "╯"],
   }[position];
-  return `${chars[0]}${"─".repeat(tableContentWidth(widths) + 2)}${chars[1]}`;
+  return `${chars[0]}${"─".repeat(tableContentWidth(widths) + (TABLE_PADDING_X * 2))}${chars[1]}`;
 }
 
 function tableWidths(columns: number, showWorkspace: boolean): number[] {
