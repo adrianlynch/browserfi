@@ -385,7 +385,7 @@ function EditForm({ mode, setMode, theme }: { mode: Extract<Mode, { type: "edit"
   const valueWidth = Math.max(12, (columns || 80) - 2 - (EDIT_PADDING_X * 2) - EDIT_LABEL_WIDTH);
   return (
     <Box flexDirection="column">
-      <Box borderStyle="round" borderColor="gray" flexDirection="column" paddingX={EDIT_PADDING_X} paddingTop={1} paddingBottom={1}>
+      <Box borderStyle="round" borderColor="gray" flexDirection="column" paddingX={EDIT_PADDING_X} paddingBottom={1}>
         <Text bold>{mode.originalKey ? `Edit ${mode.originalKey}` : "Add new app"}</Text>
         <Text> </Text>
         {mode.fields.map((item, index) => (
