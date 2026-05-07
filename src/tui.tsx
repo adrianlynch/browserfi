@@ -357,29 +357,31 @@ function EditForm({ mode, setMode }: { mode: Extract<Mode, { type: "edit" }>; se
   return (
     <Box flexDirection="column">
       <Text bold>{mode.originalKey ? `Edit ${mode.originalKey}` : "Add new app"}</Text>
-      {mode.fields.map((item, index) => (
-        <Box key={item.key}>
-          <Box width={22}>
-            <Text color={index === mode.field ? "cyan" : undefined}>{item.label}</Text>
+      <Box borderStyle="round" borderColor="gray" flexDirection="column" paddingX={1}>
+        {mode.fields.map((item, index) => (
+          <Box key={item.key}>
+            <Box width={22}>
+              <Text color={index === mode.field ? "cyan" : undefined}>{item.label}</Text>
+            </Box>
+            {index === mode.field && item.key !== "workspace" && item.key !== "browser" && item.key !== "iconColor" && item.key !== "iconBackgroundColor" ? (
+              <TextInput
+                value={mode.values[item.key]}
+                onChange={(value) => setMode({ ...mode, values: { ...mode.values, [field.key]: value } })}
+              />
+            ) : index === mode.field && item.key === "browser" ? (
+              <Text color="cyan">{mode.values.browser || "-"} {mode.picker === "browser" ? "" : "(enter to choose)"}</Text>
+            ) : index === mode.field && item.key === "workspace" ? (
+              <Text color="cyan">{mode.values.workspace || "-"} {mode.picker === "workspace" ? "" : "(enter to choose)"}</Text>
+            ) : index === mode.field && item.key === "iconColor" ? (
+              <Text color="cyan">{mode.values.iconColor || "default"} {mode.picker === "iconColor" ? "" : "(enter to choose)"}</Text>
+            ) : index === mode.field && item.key === "iconBackgroundColor" ? (
+              <Text color="cyan">{mode.values.iconBackgroundColor || "default"} {mode.picker === "iconBackgroundColor" ? "" : "(enter to choose)"}</Text>
+            ) : (
+              <Text>{mode.values[item.key] || "-"}</Text>
+            )}
           </Box>
-          {index === mode.field && item.key !== "workspace" && item.key !== "browser" && item.key !== "iconColor" && item.key !== "iconBackgroundColor" ? (
-            <TextInput
-              value={mode.values[item.key]}
-              onChange={(value) => setMode({ ...mode, values: { ...mode.values, [field.key]: value } })}
-            />
-          ) : index === mode.field && item.key === "browser" ? (
-            <Text color="cyan">{mode.values.browser || "-"} {mode.picker === "browser" ? "" : "(enter to choose)"}</Text>
-          ) : index === mode.field && item.key === "workspace" ? (
-            <Text color="cyan">{mode.values.workspace || "-"} {mode.picker === "workspace" ? "" : "(enter to choose)"}</Text>
-          ) : index === mode.field && item.key === "iconColor" ? (
-            <Text color="cyan">{mode.values.iconColor || "default"} {mode.picker === "iconColor" ? "" : "(enter to choose)"}</Text>
-          ) : index === mode.field && item.key === "iconBackgroundColor" ? (
-            <Text color="cyan">{mode.values.iconBackgroundColor || "default"} {mode.picker === "iconBackgroundColor" ? "" : "(enter to choose)"}</Text>
-          ) : (
-            <Text>{mode.values[item.key] || "-"}</Text>
-          )}
-        </Box>
-      ))}
+        ))}
+      </Box>
       {mode.picker === "workspace" && (
         <Box flexDirection="column" marginTop={1}>
           {mode.workspaceOptions.map((workspace) => (
