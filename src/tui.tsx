@@ -290,9 +290,9 @@ function TableBundleRow({ bundle, active, status, showWorkspace, widths }: { bun
   return (
     <Text>
       <Text color="gray">│ </Text>
-      <Text color={status === "ok" ? "green" : "yellow"}>{fit(statusLabel, widths[0]).padEnd(widths[0])}</Text>
+      <Text backgroundColor={rowBackground} color={status === "ok" ? "green" : "yellow"}>{fit(statusLabel, widths[0]).padEnd(widths[0])}</Text>
       <Text backgroundColor={rowBackground}>  </Text>
-      <Text color={bundle.iconBackgroundColor}>{bundle.iconBackgroundColor ? "●" : " "}</Text>
+      <Text backgroundColor={rowBackground} color={bundle.iconBackgroundColor}>{bundle.iconBackgroundColor ? "●" : " "}</Text>
       <Text backgroundColor={rowBackground}> {fit(bundle.displayName, widths[1] - 2).padEnd(widths[1] - 2)}</Text>
       <Text backgroundColor={rowBackground}>  {fit(bundle.browser, widths[2]).padEnd(widths[2])}</Text>
       {showWorkspace && <Text backgroundColor={rowBackground}>  {fit(bundle.workspace ?? "", widths[3]).padEnd(widths[3])}</Text>}
