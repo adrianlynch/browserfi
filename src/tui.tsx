@@ -239,7 +239,6 @@ function Table({ bundles, selected, showWorkspace, bundleNeedsBuild }: { bundles
     <Box flexDirection="column">
       <Text color="gray">{tableBorder("top", widths)}</Text>
       <Text color="gray">{tableRow(showWorkspace ? ["Status", "Name", "Browser", "Workspace"] : ["Status", "Name", "Browser"], widths)}</Text>
-      <Text color="gray">{tableBorder("middle", widths)}</Text>
       {bundles.map((bundle, index) => {
         const active = index === selected;
         const status = bundleNeedsBuild(bundle) ? "build" : "ok";
@@ -394,22 +393,21 @@ function BuildProgress({ progress, spinner }: { progress: BuildProgress & { name
 }
 
 function tableRow(values: string[], widths: number[]): string {
-  return `│ ${values.map((value, index) => fit(value, widths[index]).padEnd(widths[index])).join(" │ ")} │`;
+  return `│ ${values.map((value, index) => fit(value, widths[index]).padEnd(widths[index])).join("  ")} │`;
 }
 
-function tableBorder(position: "top" | "middle" | "bottom", widths: number[]): string {
+function tableBorder(position: "top" | "bottom", widths: number[]): string {
   const chars = {
-    top: ["╭", "┬", "╮"],
-    middle: ["├", "┼", "┤"],
-    bottom: ["╰", "┴", "╯"],
+    top: ["╭", "╮"],
+    bottom: ["╰", "╯"],
   }[position];
-  return `${chars[0]}${widths.map((width) => "─".repeat(width + 2)).join(chars[1])}${chars[2]}`;
+  return `${chars[0]}${"─".repeat(tableContentWidth(widths) + 2)}${chars[1]}`;
 }
 
 function tableWidths(columns: number, showWorkspace: boolean): number[] {
   const usableColumns = Math.max(40, columns - 2);
   const base = showWorkspace ? [6, 28, 8, 18] : [6, 40, 8];
-  const tableOverhead = 3 * base.length + 1;
+  const tableOverhead = 4 + (2 * (base.length - 1));
   let remaining = Math.max(0, usableColumns - tableOverhead - sum(base));
   const flexible = showWorkspace ? [1, 3] : [1];
   while (remaining > 0) {
@@ -420,6 +418,10 @@ function tableWidths(columns: number, showWorkspace: boolean): number[] {
     }
   }
   return base;
+}
+
+function tableContentWidth(widths: number[]): number {
+  return sum(widths) + (2 * (widths.length - 1));
 }
 
 function sum(values: number[]): number {
