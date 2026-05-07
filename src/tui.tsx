@@ -145,7 +145,10 @@ function BrowserfiTui({ options, onDone, onError }: { options: TuiOptions; onDon
 function Header({ configPath }: { configPath: string }) {
   return (
     <Box flexDirection="column" marginBottom={1}>
-      <Text bold>Browserfi - create and manage custom bundled browsers</Text>
+      <Text>
+        <Text bold color="magenta">Browserfi</Text>
+        <Text> - create and manage custom bundled browsers</Text>
+      </Text>
       <Text color="gray">Config: {configPath}</Text>
     </Box>
   );
