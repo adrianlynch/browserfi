@@ -300,7 +300,7 @@ function Footer({ mode, hasAerospace, needsSave, needsBuild, buildProgress, spin
   if (mode === "edit") {
     return (
       <Box flexDirection="column" marginTop={1}>
-        {needsSave && <Text bold color="green">Unsaved changes (s) to save</Text>}
+        {needsSave ? <Text bold color="green">Unsaved changes (s) to save</Text> : <Text> </Text>}
         <Text color="gray">{rule}</Text>
         <Text color="gray">
           {hasAerospace ? "↑/↓ move fields • enter choose browser/workspace • " : "↑/↓ move fields • enter choose browser • "}
@@ -313,6 +313,7 @@ function Footer({ mode, hasAerospace, needsSave, needsBuild, buildProgress, spin
   if (mode === "confirm") {
     return (
       <Box flexDirection="column" marginTop={1}>
+        <Text> </Text>
         <Text color="gray">{rule}</Text>
         <Text color="gray">y confirm • n/esc cancel</Text>
       </Box>
@@ -325,7 +326,7 @@ function Footer({ mode, hasAerospace, needsSave, needsBuild, buildProgress, spin
       ) : needsBuild ? (
         <Text bold color="#FFA500">Some apps need to be built (b) to build</Text>
       ) : (
-        notice && <Text bold color="green">{notice}</Text>
+        <Text bold={Boolean(notice)} color={notice ? "green" : undefined}>{notice || " "}</Text>
       )}
       <Text color="gray">{rule}</Text>
       <Text color="gray">
