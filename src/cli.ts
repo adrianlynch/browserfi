@@ -4,7 +4,8 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, cpSync, renam
 import { tmpdir, homedir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { parse as parseToml } from "smol-toml";
+import { confirm, input, select } from "@inquirer/prompts";
+import { parse as parseToml, stringify as stringifyToml } from "smol-toml";
 
 type BrowserName = "chromium" | "chrome" | "chrome-canary" | "brave" | "edge" | "firefox";
 
@@ -27,6 +28,12 @@ type Config = {
   profilesDir?: string;
   iconsDir?: string;
   bundles: BundleConfig[];
+};
+
+type LoadedConfig = {
+  path: string;
+  config: Config;
+  baseDir: string;
 };
 
 type BrowserDefinition = {
@@ -108,7 +115,19 @@ const BROWSERS: Record<BrowserName, BrowserDefinition> = {
 function main(): void {
   try {
     const args = process.argv.slice(2);
-    const command = args[0] && !args[0].startsWith("-") ? args.shift() : "build";
+    const command = args[0] && !args[0].startsWith("-") ? args.shift() : undefined;
+
+    if (!command) {
+      if (!process.stdin.isTTY || !process.stdout.isTTY) {
+        printHelp();
+        process.exit(1);
+      }
+      void tui(parseConfigPath(args)).catch((error: unknown) => {
+        console.error(`error: ${error instanceof Error ? error.message : String(error)}`);
+        process.exit(1);
+      });
+      return;
+    }
 
     switch (command) {
       case "build":
@@ -119,6 +138,12 @@ function main(): void {
         break;
       case "aerospace":
         aerospace(parseAerospaceArgs(args));
+        break;
+      case "tui":
+        void tui(parseConfigPath(args)).catch((error: unknown) => {
+          console.error(`error: ${error instanceof Error ? error.message : String(error)}`);
+          process.exit(1);
+        });
         break;
       case "init":
         init(args);
@@ -227,9 +252,8 @@ function parseAerospaceArgs(args: string[]): { configPath?: string; aerospaceCon
 
 function build(options: { configPath?: string; force: boolean }): void {
   requireMacos();
-  const configPath = findConfigPath(options.configPath);
-  const config = readConfig(configPath);
-  const bundles = resolveBundles(config, dirname(configPath));
+  const loaded = loadConfig(options.configPath);
+  const bundles = resolveBundles(loaded.config, loaded.baseDir);
   const aerospaceSnippets: Array<{ bundleId: string; workspace: string }> = [];
   let iconsChanged = false;
 
@@ -237,19 +261,7 @@ function build(options: { configPath?: string; force: boolean }): void {
     console.log(`==> ${bundle.appName}`);
     let changed = false;
 
-    if (existsSync(bundle.appPath) && options.force) {
-      console.log("    removing existing bundle");
-      rmSync(bundle.appPath, { recursive: true, force: true });
-    }
-
-    if (!existsSync(bundle.appPath)) {
-      console.log(`    copying ${bundle.sourceApp} -> ${bundle.appPath}`);
-      cpSync(bundle.sourceApp, bundle.appPath, { recursive: true });
-      configureBundle(bundle);
-      changed = true;
-    } else {
-      console.log("    bundle exists (use --force to rebuild)");
-    }
+    changed = createOrUpdateBundle(bundle, options.force);
 
     if (applyIcon(bundle)) {
       console.log(`    applied icon from ${relativePath(join(bundle.iconsDir, `${bundle.key}.*`))}`);
@@ -282,9 +294,8 @@ function build(options: { configPath?: string; force: boolean }): void {
 }
 
 function list(options: { configPath?: string; format: ListFormat }): void {
-  const configPath = findConfigPath(options.configPath);
-  const config = readConfig(configPath);
-  const bundles = resolveBundles(config, dirname(configPath));
+  const loaded = loadConfig(options.configPath);
+  const bundles = resolveBundles(loaded.config, loaded.baseDir);
 
   if (options.format === "json") {
     console.log(JSON.stringify(bundles.map(toListItem), null, 2));
@@ -298,9 +309,8 @@ function list(options: { configPath?: string; format: ListFormat }): void {
 }
 
 function aerospace(options: { configPath?: string; aerospaceConfigPath?: string; write: boolean; reload: boolean }): void {
-  const configPath = findConfigPath(options.configPath);
-  const config = readConfig(configPath);
-  const bundles = resolveBundles(config, dirname(configPath));
+  const loaded = loadConfig(options.configPath);
+  const bundles = resolveBundles(loaded.config, loaded.baseDir);
   const rules = aerospaceRules(bundles);
 
   if (!options.write) {
@@ -317,6 +327,98 @@ function aerospace(options: { configPath?: string; aerospaceConfigPath?: string;
   if (options.reload) {
     run("aerospace", ["reload-config"]);
   }
+}
+
+async function tui(configPathArg?: string): Promise<void> {
+  requireMacos();
+  let loaded = loadConfig(configPathArg);
+
+  while (true) {
+    const bundles = resolveBundles(loaded.config, loaded.baseDir);
+    const action = await select({
+      message: "browserfi",
+      choices: [
+        ...bundles.map((bundle) => ({
+          name: `${bundle.key}  (${bundle.displayName})`,
+          value: `bundle:${bundle.key}`,
+          description: `${bundle.browser} -> ${bundle.workspace ?? "no workspace"}`,
+        })),
+        { name: "Build all", value: "build-all" },
+        { name: "Write AeroSpace rules", value: "aerospace-write" },
+        { name: "Quit", value: "quit" },
+      ],
+    });
+
+    if (action === "quit") return;
+    if (action === "build-all") {
+      build({ configPath: loaded.path, force: false });
+      continue;
+    }
+    if (action === "aerospace-write") {
+      aerospace({ configPath: loaded.path, write: true, reload: false });
+      continue;
+    }
+
+    const key = action.replace(/^bundle:/, "");
+    const bundle = bundles.find((item) => item.key === key);
+    if (!bundle) {
+      throw new Error(`bundle not found: ${key}`);
+    }
+
+    const bundleAction = await select({
+      message: bundle.key,
+      choices: [
+        { name: "Edit config values", value: "edit" },
+        { name: "Build/update app", value: "build" },
+        { name: "Force rebuild app", value: "rebuild" },
+        { name: "Remove generated app", value: "remove-app" },
+        { name: "Remove generated app and profile", value: "remove-all" },
+        { name: "Back", value: "back" },
+      ],
+    });
+
+    if (bundleAction === "back") continue;
+    if (bundleAction === "edit") {
+      await editBundle(loaded, key);
+      loaded = loadConfig(loaded.path);
+    } else if (bundleAction === "build") {
+      createOrUpdateBundle(bundle, false);
+    } else if (bundleAction === "rebuild") {
+      createOrUpdateBundle(bundle, true);
+    } else if (bundleAction === "remove-app") {
+      await removeBundleInteractive(bundle, false);
+    } else if (bundleAction === "remove-all") {
+      await removeBundleInteractive(bundle, true);
+    }
+  }
+}
+
+async function editBundle(loaded: LoadedConfig, key: string): Promise<void> {
+  const entry = loaded.config.bundles.find((bundle) => bundle.key === key);
+  if (!entry) throw new Error(`bundle not found: ${key}`);
+
+  const browser = await select<BrowserName>({
+    message: "Browser",
+    default: entry.browser ?? "chromium",
+    choices: Object.keys(BROWSERS).map((name) => ({ name, value: name as BrowserName })),
+  });
+  const newKey = await input({ message: "Key", default: entry.key, validate: validateKey });
+  const displayName = await input({ message: "Display name", default: entry.displayName ?? "" });
+  const workspace = await input({ message: "AeroSpace workspace", default: entry.workspace ?? "" });
+
+  entry.browser = browser;
+  entry.key = newKey;
+  entry.displayName = displayName || undefined;
+  entry.workspace = workspace || undefined;
+  writeConfig(loaded.path, loaded.config);
+  console.log(`updated ${loaded.path}`);
+}
+
+async function removeBundleInteractive(bundle: ResolvedBundle, deleteProfile: boolean): Promise<void> {
+  const target = deleteProfile ? `${bundle.appPath} and ${bundle.profileDir}` : bundle.appPath;
+  const ok = await confirm({ message: `Remove ${target}?`, default: false });
+  if (!ok) return;
+  removeBundle(bundle, deleteProfile);
 }
 
 function toListItem(bundle: ResolvedBundle): Record<string, string | undefined> {
@@ -393,6 +495,23 @@ function readConfig(configPath: string): Config {
     throw new Error("config must contain a bundles array");
   }
   return config;
+}
+
+function loadConfig(configPathArg?: string): LoadedConfig {
+  const configPath = findConfigPath(configPathArg);
+  return {
+    path: configPath,
+    config: readConfig(configPath),
+    baseDir: dirname(configPath),
+  };
+}
+
+function writeConfig(configPath: string, config: Config): void {
+  if (configPath.endsWith(".json")) {
+    writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
+  } else {
+    writeFileSync(configPath, stringifyToml(config));
+  }
 }
 
 function findConfigPath(configPath?: string): string {
@@ -480,6 +599,44 @@ function configureBundle(bundle: ResolvedBundle): void {
   }
   writeFileSync(executablePath, wrapperScript(bundle), { mode: 0o755 });
   chmodSync(executablePath, 0o755);
+}
+
+function createOrUpdateBundle(bundle: ResolvedBundle, force: boolean): boolean {
+  let changed = false;
+
+  if (existsSync(bundle.appPath) && force) {
+    console.log("    removing existing bundle");
+    rmSync(bundle.appPath, { recursive: true, force: true });
+  }
+
+  if (!existsSync(bundle.appPath)) {
+    console.log(`    copying ${bundle.sourceApp} -> ${bundle.appPath}`);
+    cpSync(bundle.sourceApp, bundle.appPath, { recursive: true });
+    configureBundle(bundle);
+    changed = true;
+  } else {
+    console.log("    bundle exists (use --force to rebuild)");
+  }
+
+  return changed;
+}
+
+function removeBundle(bundle: ResolvedBundle, deleteProfile: boolean): void {
+  if (existsSync(bundle.appPath)) {
+    rmSync(bundle.appPath, { recursive: true, force: true });
+    console.log(`removed ${bundle.appPath}`);
+  } else {
+    console.log(`app not found at ${bundle.appPath}`);
+  }
+
+  if (deleteProfile) {
+    if (existsSync(bundle.profileDir)) {
+      rmSync(bundle.profileDir, { recursive: true, force: true });
+      console.log(`removed ${bundle.profileDir}`);
+    } else {
+      console.log(`profile not found at ${bundle.profileDir}`);
+    }
+  }
 }
 
 function wrapperScript(bundle: ResolvedBundle): string {
@@ -652,6 +809,10 @@ function requireValue(args: string[], index: number, flag: string): string {
   return value;
 }
 
+function validateKey(value: string): true | string {
+  return KEY_PATTERN.test(value) ? true : "Use only letters, numbers, dots, underscores, and hyphens.";
+}
+
 function titleCase(value: string): string {
   return value
     .split(/[-_]/)
@@ -675,6 +836,8 @@ function printHelp(): void {
   console.log(`browserfi
 
 Usage:
+  browserfi
+  browserfi tui [--config .browserfi.toml]
   browserfi build [--force] [--config .browserfi.toml]
   browserfi list [--wide|--json|--paths] [--config .browserfi.toml]
   browserfi aerospace [--write] [--reload] [--config .browserfi.toml]
@@ -682,6 +845,7 @@ Usage:
   browserfi help
 
 Commands:
+  tui     Open the interactive terminal UI.
   build   Create or update browser app bundles.
   list    Print resolved bundle paths, ids, and profiles.
   aerospace Print or write AeroSpace on-window-detected rules.

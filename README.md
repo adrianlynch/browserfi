@@ -65,7 +65,13 @@ brew install adrianlynch/tap/browserfi
 
 1. Edit [.browserfi.toml](.browserfi.toml).
 2. Drop optional per-bundle icons into `icons/<key>.png` or `icons/<key>.icns`.
-3. Run:
+3. Run the interactive UI:
+
+```bash
+browserfi
+```
+
+Or build everything directly:
 
 ```bash
 browserfi build
@@ -78,6 +84,10 @@ bundles from scratch while preserving profile data:
 ```bash
 browserfi build --force
 ```
+
+The interactive UI lets you select a bundle with arrow keys, edit its config
+values, build or force rebuild it, remove the generated app, remove the app and
+profile, and write AeroSpace rules.
 
 List configured bundles as a table:
 
