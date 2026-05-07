@@ -89,14 +89,16 @@ The interactive UI shows a compact table with installed/missing status and a
 detail panel for the selected bundle. Use arrow keys to select a row, then:
 
 - `enter`/`e`: edit config values inline
+- `a`: add new app
 - `b`: build/update selected app
 - `f`: force rebuild selected app
-- `d`: delete app and remove its config row
-- `D`: delete app, profile, and config row
-- `x`: remove only the config row
+- `d`: delete app
 - `B`: build all
 - `w`: write AeroSpace rules
 - `q`: quit
+
+Deleting an app removes its generated `.app`, profile data, and config row
+after confirmation.
 
 List configured bundles as a table:
 

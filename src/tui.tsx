@@ -19,7 +19,7 @@ type TuiOptions = {
 
 type Mode =
   | { type: "table" }
-  | { type: "edit"; key: string; values: EditValues; field: number }
+  | { type: "edit"; originalKey?: string; values: EditValues; field: number }
   | { type: "confirm"; message: string; run: () => string };
 
 type EditValues = {
@@ -81,7 +81,7 @@ function BrowserfiTui({ options, onDone, onError }: { options: TuiOptions; onDon
           setMode({ type: "table" });
         } else if (key.tab || key.return) {
           if (mode.field === fields.length - 1) {
-            saveEdit(options, loaded, mode.key, mode.values);
+            saveEdit(options, loaded, mode.originalKey, mode.values);
             setMessage(`updated ${loaded.path}`);
             reload();
             setMode({ type: "table" });
@@ -99,7 +99,9 @@ function BrowserfiTui({ options, onDone, onError }: { options: TuiOptions; onDon
       } else if (key.downArrow || input === "j") {
         setSelected((value: number) => Math.min(bundles.length - 1, value + 1));
       } else if ((input === "e" || key.return) && selectedBundle) {
-        setMode({ type: "edit", key: selectedBundle.key, values: editValues(selectedBundle), field: 0 });
+        setMode({ type: "edit", originalKey: selectedBundle.key, values: editValues(selectedBundle), field: 0 });
+      } else if (input === "a") {
+        setMode({ type: "edit", values: newAppValues(loaded.config), field: 0 });
       } else if (input === "b" && selectedBundle) {
         options.createOrUpdateBundle(selectedBundle, false);
         setMessage(`built ${selectedBundle.key}`);
@@ -109,11 +111,7 @@ function BrowserfiTui({ options, onDone, onError }: { options: TuiOptions; onDon
         setMessage(`rebuilt ${selectedBundle.key}`);
         reload();
       } else if (input === "d" && selectedBundle) {
-        setMode(confirmDelete(options, loaded, selectedBundle, false));
-      } else if (input === "D" && selectedBundle) {
-        setMode(confirmDelete(options, loaded, selectedBundle, true));
-      } else if (input === "x" && selectedBundle) {
-        setMode(confirmRemoveConfig(options, loaded, selectedBundle.key));
+        setMode(confirmDeleteApp(options, loaded, selectedBundle));
       } else if (input === "B") {
         for (const bundle of bundles) options.createOrUpdateBundle(bundle, false);
         setMessage("built all bundles");
@@ -187,7 +185,7 @@ function EditForm({ mode, setMode }: { mode: Extract<Mode, { type: "edit" }>; se
   const field = fields[mode.field];
   return (
     <Box flexDirection="column">
-      <Text bold>Edit {mode.key}</Text>
+      <Text bold>{mode.originalKey ? `Edit ${mode.originalKey}` : "Add new app"}</Text>
       {fields.map((item, index) => (
         <Box key={item.key}>
           <Box width={22}>
@@ -214,7 +212,7 @@ function Footer({ mode }: { mode: Mode["type"] }) {
   if (mode === "confirm") {
     return <Text color="gray">y confirm • n/esc cancel</Text>;
   }
-  return <Text color="gray">↑/↓ select • enter/e edit • b build • f rebuild • d delete • D delete+profile • x remove config • B build all • w aerospace • q quit</Text>;
+  return <Text color="gray">↑/↓ select • a add app • enter/e edit • b build • f rebuild • d delete app • B build all • w aerospace • q quit</Text>;
 }
 
 function row(values: string[], widths: number[]): string {
@@ -240,18 +238,44 @@ function editValues(bundle: ResolvedBundle): EditValues {
   };
 }
 
-function saveEdit(options: TuiOptions, loaded: LoadedConfig, originalKey: string, values: EditValues): void {
-  const entry = loaded.config.bundles.find((bundle) => bundle.key === originalKey);
-  if (!entry) throw new Error(`bundle not found: ${originalKey}`);
+function newAppValues(config: Config): EditValues {
+  const base = "new-app";
+  let key = base;
+  let count = 2;
+  while (config.bundles.some((bundle) => bundle.key === key)) {
+    key = `${base}-${count}`;
+    count += 1;
+  }
+  return {
+    browser: "chromium",
+    key,
+    displayName: "New App",
+    workspace: "",
+  };
+}
 
+function saveEdit(options: TuiOptions, loaded: LoadedConfig, originalKey: string | undefined, values: EditValues): void {
   const keyValidation = validateKey(values.key);
   if (keyValidation !== true) throw new Error(keyValidation);
   if (!browserNames.includes(values.browser)) throw new Error(`unsupported browser: ${values.browser}`);
+  const duplicate = loaded.config.bundles.some((bundle) => bundle.key === values.key && bundle.key !== originalKey);
+  if (duplicate) throw new Error(`bundle already exists: ${values.key}`);
 
-  entry.browser = values.browser as BundleConfig["browser"];
-  entry.key = values.key;
-  entry.displayName = values.displayName || undefined;
-  entry.workspace = values.workspace || undefined;
+  const next: BundleConfig = {
+    browser: values.browser as BundleConfig["browser"],
+    key: values.key,
+    displayName: values.displayName || undefined,
+    workspace: values.workspace || undefined,
+  };
+
+  if (originalKey) {
+    const index = loaded.config.bundles.findIndex((bundle) => bundle.key === originalKey);
+    if (index === -1) throw new Error(`bundle not found: ${originalKey}`);
+    loaded.config.bundles[index] = { ...loaded.config.bundles[index], ...next };
+  } else {
+    loaded.config.bundles.push(next);
+  }
+
   options.writeConfig(loaded.path, loaded.config);
 }
 
@@ -259,26 +283,14 @@ function validateKey(value: string): true | string {
   return keyPattern.test(value) ? true : "Use only letters, numbers, dots, underscores, and hyphens.";
 }
 
-function confirmDelete(options: TuiOptions, loaded: LoadedConfig, bundle: ResolvedBundle, deleteProfile: boolean): Mode {
-  const target = deleteProfile ? "app, profile, and config row" : "app and config row";
+function confirmDeleteApp(options: TuiOptions, loaded: LoadedConfig, bundle: ResolvedBundle): Mode {
   return {
     type: "confirm",
-    message: `Delete ${target} for ${bundle.key}?`,
+    message: `Delete ${bundle.key}? This removes the app, profile data, and config row.`,
     run: () => {
-      options.removeBundle(bundle, deleteProfile);
+      options.removeBundle(bundle, true);
       removeConfigEntry(options, loaded, bundle.key);
       return `removed ${bundle.key}`;
-    },
-  };
-}
-
-function confirmRemoveConfig(options: TuiOptions, loaded: LoadedConfig, key: string): Mode {
-  return {
-    type: "confirm",
-    message: `Remove ${key} from config only?`,
-    run: () => {
-      removeConfigEntry(options, loaded, key);
-      return `removed ${key} from config`;
     },
   };
 }
