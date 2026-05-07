@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -246,12 +247,37 @@ function isRefreshInput(input: string, key: { ctrl?: boolean; name?: string; raw
 }
 
 function isDarkTerminal(): boolean {
+  if (process.env.BROWSERFI_THEME === "dark") return true;
+  if (process.env.BROWSERFI_THEME === "light") return false;
+
   const colorFgBg = process.env.COLORFGBG;
   const background = colorFgBg?.split(";").at(-1);
   if (background && /^\d+$/.test(background)) {
     return Number(background) < 8;
   }
+
+  if (process.env.TERM_PROGRAM?.toLowerCase() === "ghostty" && ghosttyThemeFollowsSystem()) {
+    return isMacosDarkMode();
+  }
+
   return false;
+}
+
+function ghosttyThemeFollowsSystem(): boolean {
+  try {
+    const config = readFileSync(join(homedir(), ".config/ghostty/config"), "utf8");
+    return /^theme\s*=\s*.*\blight:.*\bdark:/im.test(config);
+  } catch {
+    return false;
+  }
+}
+
+function isMacosDarkMode(): boolean {
+  try {
+    return execFileSync("defaults", ["read", "-g", "AppleInterfaceStyle"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim() === "Dark";
+  } catch {
+    return false;
+  }
 }
 
 function Header({ configPath, redrawToken }: { configPath: string; redrawToken: number }) {
