@@ -127,6 +127,7 @@ function main(): void {
         configPath: parseConfigPath(args),
         loadConfig,
         resolveBundles,
+        bundleNeedsBuild,
         createOrUpdateBundle,
         removeBundle,
         writeConfig,
@@ -153,6 +154,7 @@ function main(): void {
           configPath: parseConfigPath(args),
           loadConfig,
           resolveBundles,
+          bundleNeedsBuild,
           createOrUpdateBundle,
           removeBundle,
           writeConfig,
@@ -546,6 +548,25 @@ export function createOrUpdateBundle(bundle: ResolvedBundle, force: boolean, opt
   return changed;
 }
 
+export function bundleNeedsBuild(bundle: ResolvedBundle): boolean {
+  if (!existsSync(bundle.appPath)) return true;
+
+  const plist = join(bundle.appPath, "Contents/Info.plist");
+  if (plistReadString(plist, "CFBundleIdentifier") !== bundle.bundleId) return true;
+  if (plistReadString(plist, "CFBundleName") !== bundle.displayName) return true;
+  if (plistReadString(plist, "CFBundleDisplayName") !== bundle.displayName) return true;
+
+  const executablePath = join(bundle.appPath, "Contents/MacOS", bundle.executableName);
+  const realExecutablePath = `${executablePath}-real`;
+  if (!existsSync(realExecutablePath)) return true;
+
+  try {
+    return readFileSync(executablePath, "utf8") !== wrapperScript(bundle);
+  } catch {
+    return true;
+  }
+}
+
 function copyAppBundle(sourceApp: string, appPath: string): void {
   run("/bin/cp", ["-R", sourceApp, appPath]);
 }
@@ -634,6 +655,14 @@ function plistSetString(plist: string, key: string, value: string): void {
     plistBuddy(["Set", `:${key}`, quotedValue], plist, { quiet: true });
   } catch {
     plistBuddy(["Add", `:${key}`, "string", quotedValue], plist);
+  }
+}
+
+function plistReadString(plist: string, key: string): string | undefined {
+  try {
+    return execFileSync("/usr/libexec/PlistBuddy", ["-c", `Print :${key}`, plist], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+  } catch {
+    return undefined;
   }
 }
 

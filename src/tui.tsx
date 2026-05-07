@@ -14,6 +14,7 @@ type TuiOptions = {
   configPath?: string;
   loadConfig: (configPath?: string) => LoadedConfig;
   resolveBundles: (config: Config, baseDir: string) => ResolvedBundle[];
+  bundleNeedsBuild: (bundle: ResolvedBundle) => boolean;
   createOrUpdateBundle: (bundle: ResolvedBundle, force: boolean, options?: { quiet?: boolean }) => boolean;
   removeBundle: (bundle: ResolvedBundle, deleteProfile: boolean, options?: { quiet?: boolean }) => void;
   writeConfig: (configPath: string, config: Config) => void;
@@ -74,7 +75,7 @@ function BrowserfiTui({ options, onDone, onError }: { options: TuiOptions; onDon
   const selectedBundle = bundles[Math.min(selected, Math.max(0, bundles.length - 1))];
   const fields = editFields(aerospaceInfo);
   const browserOptions = installedBrowsers(loaded.config.bundles);
-  const needsBuild = mode.type === "table" && selectedBundle ? !existsSync(selectedBundle.appPath) : false;
+  const needsBuild = mode.type === "table" && selectedBundle ? options.bundleNeedsBuild(selectedBundle) : false;
   const needsSave = mode.type === "edit" && editNeedsSave(mode);
 
   const reload = () => setLoaded(options.loadConfig(loaded.path));
@@ -161,7 +162,7 @@ function BrowserfiTui({ options, onDone, onError }: { options: TuiOptions; onDon
       {mode.type === "edit" ? (
         <EditForm mode={mode} setMode={setMode} />
       ) : (
-        <Table bundles={bundles} selected={selected} showWorkspace={Boolean(aerospaceInfo.configPath)} />
+        <Table bundles={bundles} selected={selected} showWorkspace={Boolean(aerospaceInfo.configPath)} bundleNeedsBuild={options.bundleNeedsBuild} />
       )}
       {mode.type === "confirm" && <Text color="yellow">{mode.message} y/n</Text>}
       {message && <Text color="cyan">{message}</Text>}
@@ -182,7 +183,7 @@ function Header({ configPath }: { configPath: string }) {
   );
 }
 
-function Table({ bundles, selected, showWorkspace }: { bundles: ResolvedBundle[]; selected: number; showWorkspace: boolean }) {
+function Table({ bundles, selected, showWorkspace, bundleNeedsBuild }: { bundles: ResolvedBundle[]; selected: number; showWorkspace: boolean; bundleNeedsBuild: (bundle: ResolvedBundle) => boolean }) {
   const { stdout } = useStdout();
   const widths = tableWidths(stdout.columns ?? 100, showWorkspace);
   const selectedBundle = bundles[selected];
@@ -193,7 +194,7 @@ function Table({ bundles, selected, showWorkspace }: { bundles: ResolvedBundle[]
       <Text color="gray">{tableBorder("middle", widths)}</Text>
       {bundles.map((bundle, index) => {
         const active = index === selected;
-        const status = existsSync(bundle.appPath) ? "ok" : "build";
+        const status = bundleNeedsBuild(bundle) ? "build" : "ok";
         return (
           <Text key={bundle.key} inverse={active} color={status === "build" ? "yellow" : undefined}>
             {tableRow(showWorkspace ? [status, bundle.displayName, bundle.key, bundle.browser, bundle.workspace ?? ""] : [status, bundle.displayName, bundle.key, bundle.browser], widths)}
