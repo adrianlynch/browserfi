@@ -11,6 +11,7 @@ const browserNames = ["chromium", "chrome", "chrome-canary", "brave", "edge", "f
 const spinnerFrames = ["*", "+", "-", "+"];
 const iconColors = ["", "#34CDD7", "#FFB000", "#FF5C8A", "#7C5CFF", "#2ECC71", "#FFFFFF", "#111111"];
 const REDRAW_INTERVAL_MS = 2000;
+const SELECTED_ROW_BACKGROUND = "#FFD6E7";
 
 type TuiOptions = {
   configPath?: string;
@@ -285,15 +286,16 @@ function Table({ bundles, selected, showWorkspace, bundleNeedsBuild }: { bundles
 
 function TableBundleRow({ bundle, active, status, showWorkspace, widths }: { bundle: ResolvedBundle; active: boolean; status: "ok" | "build"; showWorkspace: boolean; widths: number[] }) {
   const statusLabel = status === "ok" ? "✓ ok" : "build";
+  const rowBackground = active ? SELECTED_ROW_BACKGROUND : undefined;
   return (
-    <Text inverse={active}>
+    <Text>
       <Text color="gray">│ </Text>
       <Text color={status === "ok" ? "green" : "yellow"}>{fit(statusLabel, widths[0]).padEnd(widths[0])}</Text>
-      <Text>  </Text>
+      <Text backgroundColor={rowBackground}>  </Text>
       <Text color={bundle.iconBackgroundColor}>{bundle.iconBackgroundColor ? "●" : " "}</Text>
-      <Text> {fit(bundle.displayName, widths[1] - 2).padEnd(widths[1] - 2)}</Text>
-      <Text>  {fit(bundle.browser, widths[2]).padEnd(widths[2])}</Text>
-      {showWorkspace && <Text>  {fit(bundle.workspace ?? "", widths[3]).padEnd(widths[3])}</Text>}
+      <Text backgroundColor={rowBackground}> {fit(bundle.displayName, widths[1] - 2).padEnd(widths[1] - 2)}</Text>
+      <Text backgroundColor={rowBackground}>  {fit(bundle.browser, widths[2]).padEnd(widths[2])}</Text>
+      {showWorkspace && <Text backgroundColor={rowBackground}>  {fit(bundle.workspace ?? "", widths[3]).padEnd(widths[3])}</Text>}
       <Text color="gray"> │</Text>
     </Text>
   );
