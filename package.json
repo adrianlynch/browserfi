@@ -4,7 +4,7 @@
   "description": "Per-context browser app bundles for macOS.",
   "type": "module",
   "bin": {
-    "browserfi": "./dist/cli.js"
+    "browserfi": "dist/cli.js"
   },
   "files": [
     "dist",
