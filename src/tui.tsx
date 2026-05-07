@@ -14,10 +14,6 @@ const iconColors = ["", "#34CDD7", "#FFB000", "#FF5C8A", "#7C5CFF", "#2ECC71", "
 const REDRAW_INTERVAL_MS = 2000;
 const SELECTED_ROW_BACKGROUND_LIGHT = "#FFEAF3";
 const SELECTED_ROW_BACKGROUND_DARK = "#5A2438";
-const IS_DARK_TERMINAL = isDarkTerminal();
-const SELECTED_ROW_BACKGROUND = IS_DARK_TERMINAL ? SELECTED_ROW_BACKGROUND_DARK : SELECTED_ROW_BACKGROUND_LIGHT;
-const DETAIL_LABEL_COLOR = IS_DARK_TERMINAL ? "#FFFFFF" : "#000000";
-const DETAIL_VALUE_COLOR = IS_DARK_TERMINAL ? "#B8B8B8" : "#555555";
 
 type TuiOptions = {
   configPath?: string;
@@ -63,6 +59,13 @@ type EditValues = {
 
 type EditField = { key: keyof EditValues; label: string };
 
+type TuiTheme = {
+  isDark: boolean;
+  selectedRowBackground: string;
+  detailLabelColor: string;
+  detailValueColor: string;
+};
+
 const baseFields: EditField[] = [
   { key: "browser", label: "Browser" },
   { key: "displayName", label: "Display name" },
@@ -97,6 +100,7 @@ function BrowserfiTui({ options, onDone, onError, onRefresh }: { options: TuiOpt
   const browserOptions = installedBrowsers(loaded.config.bundles);
   const needsBuild = mode.type === "table" && selectedBundle ? options.bundleNeedsBuild(selectedBundle) : false;
   const needsSave = mode.type === "edit" && editNeedsSave(mode);
+  const theme = currentTuiTheme();
 
   const reload = () => setLoaded(options.loadConfig(loaded.path));
   const done = () => {
@@ -224,9 +228,9 @@ function BrowserfiTui({ options, onDone, onError, onRefresh }: { options: TuiOpt
     <Box key={redrawToken} flexDirection="column">
       <Header configPath={loaded.path} redrawToken={redrawToken} />
       {mode.type === "edit" ? (
-        <EditForm mode={mode} setMode={setMode} />
+        <EditForm mode={mode} setMode={setMode} theme={theme} />
       ) : (
-        <Table bundles={bundles} selected={selected} showWorkspace={Boolean(aerospaceInfo.configPath)} bundleNeedsBuild={options.bundleNeedsBuild} />
+        <Table bundles={bundles} selected={selected} showWorkspace={Boolean(aerospaceInfo.configPath)} bundleNeedsBuild={options.bundleNeedsBuild} theme={theme} />
       )}
       {mode.type === "confirm" && <Text color="yellow">{mode.message} y/n</Text>}
       <Footer
@@ -244,6 +248,16 @@ function BrowserfiTui({ options, onDone, onError, onRefresh }: { options: TuiOpt
 
 function isRefreshInput(input: string, key: { ctrl?: boolean; name?: string; raw?: string }): boolean {
   return (key.ctrl && (input === "k" || input === "l" || key.name === "k" || key.name === "l")) || input === "\u000b" || input === "\u000c" || key.raw === "\u000b" || key.raw === "\u000c";
+}
+
+function currentTuiTheme(): TuiTheme {
+  const isDark = isDarkTerminal();
+  return {
+    isDark,
+    selectedRowBackground: isDark ? SELECTED_ROW_BACKGROUND_DARK : SELECTED_ROW_BACKGROUND_LIGHT,
+    detailLabelColor: isDark ? "#FFFFFF" : "#000000",
+    detailValueColor: isDark ? "#B8B8B8" : "#555555",
+  };
 }
 
 function isDarkTerminal(): boolean {
@@ -292,7 +306,7 @@ function Header({ configPath, redrawToken }: { configPath: string; redrawToken: 
   );
 }
 
-function Table({ bundles, selected, showWorkspace, bundleNeedsBuild }: { bundles: ResolvedBundle[]; selected: number; showWorkspace: boolean; bundleNeedsBuild: (bundle: ResolvedBundle) => boolean }) {
+function Table({ bundles, selected, showWorkspace, bundleNeedsBuild, theme }: { bundles: ResolvedBundle[]; selected: number; showWorkspace: boolean; bundleNeedsBuild: (bundle: ResolvedBundle) => boolean; theme: TuiTheme }) {
   const { columns } = useWindowSize();
   const widths = tableWidths(columns || 100, showWorkspace);
   const selectedBundle = bundles[selected];
@@ -305,45 +319,45 @@ function Table({ bundles, selected, showWorkspace, bundleNeedsBuild }: { bundles
         const active = index === selected;
         const status = bundleNeedsBuild(bundle) ? "build" : "ok";
         return (
-          <TableBundleRow key={bundle.key} bundle={bundle} active={active} status={status} showWorkspace={showWorkspace} widths={widths} />
+          <TableBundleRow key={bundle.key} bundle={bundle} active={active} status={status} showWorkspace={showWorkspace} widths={widths} theme={theme} />
         );
       })}
       <Text color="gray">{tableBorder("bottom", widths)}</Text>
       {bundles.length === 0 && <Text color="yellow">No bundles configured.</Text>}
       {selectedBundle && (
         <Box flexDirection="column" marginTop={1}>
-          <DetailLine label="Name" value={selectedBundle.displayName} />
-          <DetailLine label="App" value={selectedBundle.appName} />
-          <DetailLine label="Icon" value={selectedBundle.icon ?? "icons/<key>.png|icns"} />
-          <DetailLine label="Icon color" value={selectedBundle.iconColor ?? "-"} />
-          <DetailLine label="Icon background" value={selectedBundle.iconBackgroundColor ?? "-"} />
-          {showWorkspace && <DetailLine label="Workspace" value={selectedBundle.workspace ?? "-"} />}
-          <DetailLine label="Profile" value={selectedBundle.profileDir} />
+          <DetailLine label="Name" value={selectedBundle.displayName} theme={theme} />
+          <DetailLine label="App" value={selectedBundle.appName} theme={theme} />
+          <DetailLine label="Icon" value={selectedBundle.icon ?? "icons/<key>.png|icns"} theme={theme} />
+          <DetailLine label="Icon color" value={selectedBundle.iconColor ?? "-"} theme={theme} />
+          <DetailLine label="Icon background" value={selectedBundle.iconBackgroundColor ?? "-"} theme={theme} />
+          {showWorkspace && <DetailLine label="Workspace" value={selectedBundle.workspace ?? "-"} theme={theme} />}
+          <DetailLine label="Profile" value={selectedBundle.profileDir} theme={theme} />
         </Box>
       )}
     </Box>
   );
 }
 
-function DetailLine({ label, value }: { label: string; value: string }) {
+function DetailLine({ label, value, theme }: { label: string; value: string; theme: TuiTheme }) {
   return (
     <Text>
-      <Text color={DETAIL_LABEL_COLOR}>{label}:</Text>
+      <Text color={theme.detailLabelColor}>{label}:</Text>
       {" "}
-      <Text color={DETAIL_VALUE_COLOR}>{value}</Text>
+      <Text color={theme.detailValueColor}>{value}</Text>
     </Text>
   );
 }
 
-function TableBundleRow({ bundle, active, status, showWorkspace, widths }: { bundle: ResolvedBundle; active: boolean; status: "ok" | "build"; showWorkspace: boolean; widths: number[] }) {
+function TableBundleRow({ bundle, active, status, showWorkspace, widths, theme }: { bundle: ResolvedBundle; active: boolean; status: "ok" | "build"; showWorkspace: boolean; widths: number[]; theme: TuiTheme }) {
   const statusLabel = status === "ok" ? "✓ ok" : "build";
-  const rowBackground = active ? SELECTED_ROW_BACKGROUND : undefined;
+  const rowBackground = active ? theme.selectedRowBackground : undefined;
   return (
     <Text>
       <Text color="gray">│ </Text>
       <Text backgroundColor={rowBackground} color={status === "ok" ? "green" : "yellow"}>{fit(statusLabel, widths[0]).padEnd(widths[0])}</Text>
       <Text backgroundColor={rowBackground}>  </Text>
-      <ColorDot color={bundle.iconBackgroundColor} backgroundColor={rowBackground} blankWhenEmpty />
+      <ColorDot color={bundle.iconBackgroundColor} backgroundColor={rowBackground} blankWhenEmpty theme={theme} />
       <Text backgroundColor={rowBackground}> {fit(bundle.displayName, widths[1] - 2).padEnd(widths[1] - 2)}</Text>
       <Text backgroundColor={rowBackground}>  {fit(bundle.browser, widths[2]).padEnd(widths[2])}</Text>
       {showWorkspace && <Text backgroundColor={rowBackground}>  {fit(bundle.workspace ?? "", widths[3]).padEnd(widths[3])}</Text>}
@@ -352,7 +366,7 @@ function TableBundleRow({ bundle, active, status, showWorkspace, widths }: { bun
   );
 }
 
-function EditForm({ mode, setMode }: { mode: Extract<Mode, { type: "edit" }>; setMode: (mode: Mode) => void }) {
+function EditForm({ mode, setMode, theme }: { mode: Extract<Mode, { type: "edit" }>; setMode: (mode: Mode) => void; theme: TuiTheme }) {
   const field = mode.fields[mode.field];
   return (
     <Box flexDirection="column">
@@ -373,11 +387,11 @@ function EditForm({ mode, setMode }: { mode: Extract<Mode, { type: "edit" }>; se
             ) : index === mode.field && item.key === "workspace" ? (
               <Text color="cyan">{mode.values.workspace || "-"} {mode.picker === "workspace" ? "" : "(enter to choose)"}</Text>
             ) : index === mode.field && item.key === "iconColor" ? (
-              <ColorValue value={mode.values.iconColor} active suffix={mode.picker === "iconColor" ? "" : " (enter to choose)"} />
+              <ColorValue value={mode.values.iconColor} active suffix={mode.picker === "iconColor" ? "" : " (enter to choose)"} theme={theme} />
             ) : index === mode.field && item.key === "iconBackgroundColor" ? (
-              <ColorValue value={mode.values.iconBackgroundColor} active suffix={mode.picker === "iconBackgroundColor" ? "" : " (enter to choose)"} />
+              <ColorValue value={mode.values.iconBackgroundColor} active suffix={mode.picker === "iconBackgroundColor" ? "" : " (enter to choose)"} theme={theme} />
             ) : item.key === "iconColor" || item.key === "iconBackgroundColor" ? (
-              <ColorValue value={mode.values[item.key]} />
+              <ColorValue value={mode.values[item.key]} theme={theme} />
             ) : (
               <Text>{mode.values[item.key] || "-"}</Text>
             )}
@@ -407,14 +421,14 @@ function EditForm({ mode, setMode }: { mode: Extract<Mode, { type: "edit" }>; se
       {mode.picker === "iconColor" && (
         <Box flexDirection="column" marginTop={1}>
           {iconColors.map((color) => (
-            <PickerColor key={color || "default"} color={color} selected={color === mode.values.iconColor} />
+            <PickerColor key={color || "default"} color={color} selected={color === mode.values.iconColor} theme={theme} />
           ))}
         </Box>
       )}
       {mode.picker === "iconBackgroundColor" && (
         <Box flexDirection="column" marginTop={1}>
           {iconColors.map((color) => (
-            <PickerColor key={color || "default"} color={color} selected={color === mode.values.iconBackgroundColor} />
+            <PickerColor key={color || "default"} color={color} selected={color === mode.values.iconBackgroundColor} theme={theme} />
           ))}
         </Box>
       )}
@@ -422,34 +436,34 @@ function EditForm({ mode, setMode }: { mode: Extract<Mode, { type: "edit" }>; se
   );
 }
 
-function ColorValue({ value, active = false, suffix = "" }: { value: string; active?: boolean; suffix?: string }) {
+function ColorValue({ value, active = false, suffix = "", theme }: { value: string; active?: boolean; suffix?: string; theme: TuiTheme }) {
   return (
     <Text>
-      <ColorDot color={value} />
+      <ColorDot color={value} theme={theme} />
       <Text color={active ? "cyan" : undefined}> {value || "default"}{suffix}</Text>
     </Text>
   );
 }
 
-function PickerColor({ color, selected }: { color: string; selected: boolean }) {
+function PickerColor({ color, selected, theme }: { color: string; selected: boolean; theme: TuiTheme }) {
   return (
     <Text>
       <Text color={selected ? "cyan" : "gray"}>{selected ? "› " : "  "}</Text>
-      <ColorDot color={color} />
+      <ColorDot color={color} theme={theme} />
       <Text color={selected ? "cyan" : undefined}> {color || "default"}</Text>
     </Text>
   );
 }
 
-function ColorDot({ color, backgroundColor, blankWhenEmpty = false }: { color?: string; backgroundColor?: string; blankWhenEmpty?: boolean }) {
+function ColorDot({ color, backgroundColor, blankWhenEmpty = false, theme }: { color?: string; backgroundColor?: string; blankWhenEmpty?: boolean; theme: TuiTheme }) {
   if (!color) {
     return <Text backgroundColor={backgroundColor} color="gray">{blankWhenEmpty ? " " : "●"}</Text>;
   }
   const normalized = color.toLowerCase();
   const isWhite = normalized === "#fff" || normalized === "#ffffff" || normalized === "white";
   const isBlack = normalized === "#000" || normalized === "#000000" || normalized === "#111111" || normalized === "black";
-  if ((!IS_DARK_TERMINAL && isWhite) || (IS_DARK_TERMINAL && isBlack)) {
-    return <Text backgroundColor={backgroundColor} color={IS_DARK_TERMINAL ? "white" : "black"}>○</Text>;
+  if ((!theme.isDark && isWhite) || (theme.isDark && isBlack)) {
+    return <Text backgroundColor={backgroundColor} color={theme.isDark ? "white" : "black"}>○</Text>;
   }
   return <Text backgroundColor={backgroundColor} color={color}>●</Text>;
 }
