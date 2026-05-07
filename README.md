@@ -100,6 +100,11 @@ detail panel for the selected bundle. Use arrow keys to select a row, then:
 Deleting an app removes its generated `.app`, profile data, and config row
 after confirmation.
 
+The browser field is selected from supported browsers that are installed on the
+machine. If AeroSpace config is found, Browserfi shows workspace fields and lets
+you choose from existing AeroSpace workspace names. If AeroSpace is not found,
+workspace fields and AeroSpace actions are hidden.
+
 List configured bundles as a table:
 
 ```bash
