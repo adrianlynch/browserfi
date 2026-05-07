@@ -85,9 +85,18 @@ bundles from scratch while preserving profile data:
 browserfi build --force
 ```
 
-The interactive UI lets you select a bundle with arrow keys, edit its config
-values, build or force rebuild it, remove the generated app, remove the app and
-profile, and write AeroSpace rules.
+The interactive UI shows a compact table with installed/missing status and a
+detail panel for the selected bundle. Use arrow keys to select a row, then:
+
+- `enter`/`e`: edit config values inline
+- `b`: build/update selected app
+- `f`: force rebuild selected app
+- `d`: delete app and remove its config row
+- `D`: delete app, profile, and config row
+- `x`: remove only the config row
+- `B`: build all
+- `w`: write AeroSpace rules
+- `q`: quit
 
 List configured bundles as a table:
 
