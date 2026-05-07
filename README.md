@@ -55,7 +55,7 @@ npm run build
 ```
 
 Homebrew support should be packaged as a tap formula that installs the npm
-package or a built release artifact:
+package or a built release artifact. The intended command is:
 
 ```bash
 brew install adrianlynch/tap/browserfi
@@ -86,7 +86,8 @@ browserfi build --force
 ```
 
 The interactive UI shows a compact table with installed/missing status and a
-detail panel for the selected bundle. Use arrow keys to select a row, then:
+detail panel for the selected bundle. Run `browserfi` with no command, or use
+`browserfi tui`, to open it. Use arrow keys to select a row, then:
 
 - `enter`/`e`: edit config values inline
 - `a`: add new app
@@ -104,10 +105,10 @@ browser/workspace selectors. Press `s` to save. New apps get a filesystem-safe
 `key` generated from the display name; existing apps keep their current key when
 renamed. The icon field accepts a `.svg`, `.png`, or `.icns` path or URL; leave
 it blank to use the `icons/<key>.png|icns` convention. The icon color pickers
-set `iconColor` and `iconBackgroundColor`, which tint SVG icons during build. If AeroSpace config is
-found, Browserfi shows workspace fields and lets you choose from existing
-AeroSpace workspace names. If AeroSpace is not found, workspace fields and
-AeroSpace actions are hidden.
+set `iconColor` and `iconBackgroundColor`, which customize SVG icons during
+build. If AeroSpace config is found, Browserfi shows workspace fields and lets
+you choose from existing AeroSpace workspace names. If AeroSpace is not found,
+workspace fields and AeroSpace actions are hidden.
 
 List configured bundles as a table:
 
@@ -174,7 +175,7 @@ Each bundle supports:
 - `displayName`: Finder, Dock, and menu bar name; also used for the `.app` filename
 - `icon`: optional `.svg`, `.png`, or `.icns` path or URL for this app
 - `iconColor`: optional SVG tint color, as a 6-digit hex value like `#34CDD7`
-- `iconBackgroundColor`: optional SVG background color, as a 6-digit hex value
+- `iconBackgroundColor`: optional SVG background color, as a 6-digit hex value like `#111111`
 - `workspace`: optional AeroSpace workspace for printed rules
 - `sourceApp`: optional override for the source `.app`
 - `installDir`, `profilesDir`, `iconsDir`: optional per-bundle path overrides
@@ -221,10 +222,15 @@ icons/<key>.icns
 ```
 
 `browserfi build` picks icons up by explicit path, URL, or convention. It
-downloads URL icons during build, converts SVG and PNG files to ICNS with
-macOS Quick Look, `sips`, and `iconutil`, replaces `Contents/Resources/app.icns`,
-deletes `CFBundleIconName` from `Info.plist`, re-signs ad-hoc, and refreshes
-Launch Services.
+downloads URL icons during build, converts SVG and PNG files to ICNS, replaces
+`Contents/Resources/app.icns`, deletes `CFBundleIconName` from `Info.plist`,
+re-signs ad-hoc, and refreshes Launch Services.
+
+SVG icons are normalized onto a `1024x1024` canvas before conversion. Browserfi
+preserves the SVG `viewBox`, insets the artwork slightly so it does not touch
+the macOS icon edges, optionally tints non-`none` fills and strokes with
+`iconColor`, and optionally paints `iconBackgroundColor` behind the artwork.
+PNG and ICNS icons are used as supplied.
 
 The legacy helper [build-icon.sh](build-icon.sh) can still build a simple
 macOS-style PNG from an SVG:
