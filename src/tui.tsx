@@ -259,7 +259,7 @@ function currentTuiTheme(): TuiTheme {
     isDark,
     selectedRowBackground: isDark ? SELECTED_ROW_BACKGROUND_DARK : SELECTED_ROW_BACKGROUND_LIGHT,
     detailLabelColor: isDark ? "#FFFFFF" : "#000000",
-    detailValueColor: isDark ? "#B8B8B8" : "#555555",
+    detailValueColor: isDark ? "#9A9A9A" : "#777777",
   };
 }
 
