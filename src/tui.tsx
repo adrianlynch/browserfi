@@ -67,6 +67,7 @@ function BrowserfiTui({ options, onDone, onError }: { options: TuiOptions; onDon
   const [selected, setSelected] = useState(0);
   const [mode, setMode] = useState<Mode>({ type: "table" });
   const [message, setMessage] = useState("");
+  const [buildingName, setBuildingName] = useState<string | undefined>();
   const [aerospaceInfo] = useState(loadAerospaceInfo);
 
   const bundles = useMemo(() => options.resolveBundles(loaded.config, loaded.baseDir, loaded.path), [loaded, options]);
@@ -88,6 +89,8 @@ function BrowserfiTui({ options, onDone, onError }: { options: TuiOptions; onDon
 
   useInput((input, key) => {
     try {
+      if (buildingName) return;
+
       if (mode.type === "confirm") {
         if (input.toLowerCase() === "y") {
           setMessage(mode.run());
@@ -140,9 +143,20 @@ function BrowserfiTui({ options, onDone, onError }: { options: TuiOptions; onDon
         const values = newAppValues(aerospaceInfo, browserOptions);
         setMode({ type: "edit", initialValues: values, values, field: 0, fields, browserOptions, workspaceOptions: aerospaceInfo.workspaces });
       } else if (input === "b" && selectedBundle) {
-        options.createOrUpdateBundle(selectedBundle, true, { quiet: true });
-        setMessage(`built ${selectedBundle.key}`);
-        reload();
+        const bundle = selectedBundle;
+        setBuildingName(bundle.displayName);
+        setMessage("");
+        setTimeout(() => {
+          try {
+            options.createOrUpdateBundle(bundle, true, { quiet: true });
+            setMessage(`built ${bundle.key}`);
+            reload();
+          } catch (error) {
+            handleError(error);
+          } finally {
+            setBuildingName(undefined);
+          }
+        }, 0);
       } else if (input === "d" && selectedBundle) {
         setMode(confirmDeleteApp(options, loaded, selectedBundle));
       } else if (input === "w" && aerospaceInfo.configPath) {
@@ -164,7 +178,7 @@ function BrowserfiTui({ options, onDone, onError }: { options: TuiOptions; onDon
       )}
       {mode.type === "confirm" && <Text color="yellow">{mode.message} y/n</Text>}
       {message && <Text color="cyan">{message}</Text>}
-      <Footer mode={mode.type} hasAerospace={Boolean(aerospaceInfo.configPath)} needsSave={needsSave} needsBuild={needsBuild} />
+      <Footer mode={mode.type} hasAerospace={Boolean(aerospaceInfo.configPath)} needsSave={needsSave} needsBuild={needsBuild} buildingName={buildingName} />
     </Box>
   );
 }
@@ -261,7 +275,7 @@ function EditForm({ mode, setMode }: { mode: Extract<Mode, { type: "edit" }>; se
   );
 }
 
-function Footer({ mode, hasAerospace, needsSave, needsBuild }: { mode: Mode["type"]; hasAerospace?: boolean; needsSave?: boolean; needsBuild?: boolean }) {
+function Footer({ mode, hasAerospace, needsSave, needsBuild, buildingName }: { mode: Mode["type"]; hasAerospace?: boolean; needsSave?: boolean; needsBuild?: boolean; buildingName?: string }) {
   const { stdout } = useStdout();
   const rule = "─".repeat(Math.max(20, stdout.columns ?? 80));
   if (mode === "edit") {
@@ -287,14 +301,22 @@ function Footer({ mode, hasAerospace, needsSave, needsBuild }: { mode: Mode["typ
   }
   return (
     <Box flexDirection="column" marginTop={1}>
-      {needsBuild && <Text bold color="#FFA500">Some apps need to be built (b) to build</Text>}
+      {buildingName ? <BuildProgress name={buildingName} /> : needsBuild && <Text bold color="#FFA500">Some apps need to be built (b) to build</Text>}
       <Text color="gray">{rule}</Text>
       <Text color="gray">
         {"↑/↓ select • a add app • enter/e edit • "}
-        <Text bold={needsBuild} color={needsBuild ? "#FFA500" : "gray"}>b build</Text>
+        <Text bold={needsBuild || Boolean(buildingName)} color={needsBuild || buildingName ? "#FFA500" : "gray"}>{buildingName ? "building" : "b build"}</Text>
         {hasAerospace ? " • d delete app • w aerospace • q quit" : " • d delete app • q quit"}
       </Text>
     </Box>
+  );
+}
+
+function BuildProgress({ name }: { name: string }) {
+  return (
+    <Text bold color="#FFA500">
+      Building {name} [████████░░░░░░░░]
+    </Text>
   );
 }
 
