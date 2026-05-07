@@ -346,9 +346,10 @@ function Table({ bundles, selected, showWorkspace, bundleNeedsBuild, theme }: { 
 function DetailLine({ label, value, theme }: { label: string; value: string; theme: TuiTheme }) {
   return (
     <Text>
-      <Text color={theme.detailLabelColor}>{label}:</Text>
+      {"   "}
+      <Text color={theme.detailValueColor}>{label}:</Text>
       {" "}
-      <Text color={theme.detailValueColor}>{value}</Text>
+      <Text color={theme.detailLabelColor}>{value}</Text>
     </Text>
   );
 }
