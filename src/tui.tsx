@@ -10,6 +10,7 @@ import type { BuildProgress, BundleConfig, Config, LoadedConfig, ResolvedBundle 
 const browserNames = ["chromium", "chrome", "chrome-canary", "brave", "edge", "firefox"];
 const spinnerFrames = ["*", "+", "-", "+"];
 const iconColors = ["", "#34CDD7", "#FFB000", "#FF5C8A", "#7C5CFF", "#2ECC71", "#FFFFFF", "#111111"];
+const REDRAW_INTERVAL_MS = 2000;
 
 type TuiOptions = {
   configPath?: string;
@@ -103,6 +104,12 @@ function BrowserfiTui({ options, onDone, onError, onRefresh }: { options: TuiOpt
   useEffect(() => {
     if (!buildProgress) return undefined;
     const timer = setInterval(() => setSpinnerFrame((frame) => (frame + 1) % spinnerFrames.length), 120);
+    return () => clearInterval(timer);
+  }, [buildProgress]);
+
+  useEffect(() => {
+    if (buildProgress) return undefined;
+    const timer = setInterval(() => setRedrawToken((value) => value + 1), REDRAW_INTERVAL_MS);
     return () => clearInterval(timer);
   }, [buildProgress]);
 
