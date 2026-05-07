@@ -187,9 +187,9 @@ function Table({ bundles, selected, showWorkspace }: { bundles: ResolvedBundle[]
       <Text color="gray">{tableBorder("middle", widths)}</Text>
       {bundles.map((bundle, index) => {
         const active = index === selected;
-        const status = existsSync(bundle.appPath) ? "ok" : "miss";
+        const status = existsSync(bundle.appPath) ? "ok" : "build";
         return (
-          <Text key={bundle.key} inverse={active} color={status === "miss" ? "yellow" : undefined}>
+          <Text key={bundle.key} inverse={active} color={status === "build" ? "yellow" : undefined}>
             {tableRow(showWorkspace ? [status, bundle.key, bundle.browser, bundle.workspace ?? ""] : [status, bundle.key, bundle.browser], widths)}
           </Text>
         );
