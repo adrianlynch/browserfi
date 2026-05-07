@@ -65,12 +65,14 @@ const baseFields: EditField[] = [
 
 export function runTui(options: TuiOptions): Promise<void> {
   return new Promise((resolve, reject) => {
-    const instance = render(<BrowserfiTui options={options} onDone={resolve} onError={reject} />);
+    let clear: () => void = () => undefined;
+    const instance = render(<BrowserfiTui options={options} onDone={resolve} onError={reject} onRefresh={() => clear()} />);
+    clear = instance.clear;
     instance.waitUntilExit().then(() => resolve(), reject);
   });
 }
 
-function BrowserfiTui({ options, onDone, onError }: { options: TuiOptions; onDone: () => void; onError: (error: unknown) => void }) {
+function BrowserfiTui({ options, onDone, onError, onRefresh }: { options: TuiOptions; onDone: () => void; onError: (error: unknown) => void; onRefresh: () => void }) {
   const { exit } = useApp();
   const [loaded, setLoaded] = useState(() => options.loadConfig(options.configPath));
   const [selected, setSelected] = useState(0);
@@ -78,6 +80,7 @@ function BrowserfiTui({ options, onDone, onError }: { options: TuiOptions; onDon
   const [message, setMessage] = useState("");
   const [buildProgress, setBuildProgress] = useState<(BuildProgress & { name: string }) | undefined>();
   const [spinnerFrame, setSpinnerFrame] = useState(0);
+  const [redrawToken, setRedrawToken] = useState(0);
   const [aerospaceInfo] = useState(loadAerospaceInfo);
 
   const bundles = useMemo(() => options.resolveBundles(loaded.config, loaded.baseDir, loaded.path), [loaded, options]);
@@ -105,6 +108,12 @@ function BrowserfiTui({ options, onDone, onError }: { options: TuiOptions; onDon
 
   useInput((input, key) => {
     try {
+      if (isRefreshInput(input, key)) {
+        onRefresh();
+        setRedrawToken((value) => value + 1);
+        return;
+      }
+
       if (buildProgress) return;
 
       if (mode.type === "confirm") {
@@ -198,8 +207,8 @@ function BrowserfiTui({ options, onDone, onError }: { options: TuiOptions; onDon
   });
 
   return (
-    <Box flexDirection="column">
-      <Header configPath={loaded.path} />
+    <Box key={redrawToken} flexDirection="column">
+      <Header configPath={loaded.path} redrawToken={redrawToken} />
       {mode.type === "edit" ? (
         <EditForm mode={mode} setMode={setMode} />
       ) : (
@@ -219,14 +228,18 @@ function BrowserfiTui({ options, onDone, onError }: { options: TuiOptions; onDon
   );
 }
 
-function Header({ configPath }: { configPath: string }) {
+function isRefreshInput(input: string, key: { ctrl?: boolean; name?: string; raw?: string }): boolean {
+  return (key.ctrl && (input === "k" || input === "l" || key.name === "k" || key.name === "l")) || input === "\u000b" || input === "\u000c" || key.raw === "\u000b" || key.raw === "\u000c";
+}
+
+function Header({ configPath, redrawToken }: { configPath: string; redrawToken: number }) {
   return (
     <Box flexDirection="column" marginBottom={1}>
       <Text>
         <Text bold color="magenta">Browserfi</Text>
         <Text> - create and manage custom bundled browsers</Text>
       </Text>
-      <Text color="gray">Config: {configPath}</Text>
+      <Text color="gray">Config: {configPath}{redrawToken % 2 === 0 ? "" : " "}</Text>
     </Box>
   );
 }
