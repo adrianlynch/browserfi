@@ -788,7 +788,7 @@ function applyIcon(bundle: ResolvedBundle): boolean {
     }
 
     if (lowerIconPath.endsWith(".svg")) {
-      const svg = bundle.iconColor ? colorizeSvg(resolved.path, bundle.iconColor) : { path: resolved.path, cleanup: () => undefined };
+      const svg = prepareSvgIcon(resolved.path, bundle.iconColor);
       try {
         const png = svgToPng(svg.path);
         try {
@@ -874,24 +874,39 @@ function svgToPng(src: string): { path: string; cleanup: () => void } {
   }
 }
 
-function colorizeSvg(src: string, color: string): { path: string; cleanup: () => void } {
+function prepareSvgIcon(src: string, color?: string): { path: string; cleanup: () => void } {
   const work = mkdtempSync(join(tmpdir(), "browserfi-color-"));
   const dest = join(work, "icon.svg");
   const raw = readFileSync(src, "utf8");
   const next = raw
     .replace(/<svg\b([^>]*)>/i, (_match, attrs: string) => {
+      const viewBox = /\sviewBox\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/i.test(attrs) ? "" : inferredViewBox(attrs);
       const withoutInherited = attrs
+        .replace(/\swidth\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+        .replace(/\sheight\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "")
         .replace(/\scolor\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "")
         .replace(/\sfill\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "")
         .replace(/\sstroke\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "");
-      return `<svg${withoutInherited} color="${color}" fill="${color}">`;
+      const tint = color ? ` color="${color}" fill="${color}"` : "";
+      return `<svg${withoutInherited}${viewBox} width="1024" height="1024"${tint}>`;
     })
-    .replace(/\sfill\s*=\s*"(?!none\b)[^"]*"/gi, ` fill="${color}"`)
-    .replace(/\sfill\s*=\s*'(?!none\b)[^']*'/gi, ` fill="${color}"`)
-    .replace(/\sstroke\s*=\s*"(?!none\b)[^"]*"/gi, ` stroke="${color}"`)
-    .replace(/\sstroke\s*=\s*'(?!none\b)[^']*'/gi, ` stroke="${color}"`);
+    .replace(/\sfill\s*=\s*"(?!none\b)[^"]*"/gi, color ? ` fill="${color}"` : "$&")
+    .replace(/\sfill\s*=\s*'(?!none\b)[^']*'/gi, color ? ` fill="${color}"` : "$&")
+    .replace(/\sstroke\s*=\s*"(?!none\b)[^"]*"/gi, color ? ` stroke="${color}"` : "$&")
+    .replace(/\sstroke\s*=\s*'(?!none\b)[^']*'/gi, color ? ` stroke="${color}"` : "$&");
   writeFileSync(dest, next);
   return { path: dest, cleanup: () => rmSync(work, { recursive: true, force: true }) };
+}
+
+function inferredViewBox(svgAttrs: string): string {
+  const width = numericSvgAttribute(svgAttrs, "width");
+  const height = numericSvgAttribute(svgAttrs, "height");
+  return width && height ? ` viewBox="0 0 ${width} ${height}"` : "";
+}
+
+function numericSvgAttribute(svgAttrs: string, name: string): string | undefined {
+  const match = new RegExp(`\\s${name}\\s*=\\s*["']?([0-9.]+)`, "i").exec(svgAttrs);
+  return match?.[1];
 }
 
 function pngToIcns(src: string, dest: string): void {
