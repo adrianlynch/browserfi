@@ -38,6 +38,7 @@ type BrowserDefinition = {
 };
 
 type ResolvedBundle = {
+  browser: BrowserName;
   key: string;
   displayName: string;
   workspace?: string;
@@ -51,9 +52,13 @@ type ResolvedBundle = {
   iconsDir: string;
 };
 
+type ListFormat = "table" | "wide" | "json" | "paths";
+
 const DEFAULT_CONFIG = ".browserfi.toml";
 const KEY_PATTERN = /^[A-Za-z0-9._-]+$/;
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
+const AEROSPACE_BEGIN = "# BEGIN browserfi";
+const AEROSPACE_END = "# END browserfi";
 
 const BROWSERS: Record<BrowserName, BrowserDefinition> = {
   chromium: {
@@ -110,7 +115,10 @@ function main(): void {
         build(parseBuildArgs(args));
         break;
       case "list":
-        list(parseConfigPath(args));
+        list(parseListArgs(args));
+        break;
+      case "aerospace":
+        aerospace(parseAerospaceArgs(args));
         break;
       case "init":
         init(args);
@@ -167,6 +175,56 @@ function parseConfigPath(args: string[]): string | undefined {
   return configPath;
 }
 
+function parseListArgs(args: string[]): { configPath?: string; format: ListFormat } {
+  let configPath: string | undefined;
+  let format: ListFormat = "table";
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === "--config" || arg === "-c") {
+      configPath = requireValue(args, index, arg);
+      index += 1;
+    } else if (arg === "--json") {
+      format = "json";
+    } else if (arg === "--wide") {
+      format = "wide";
+    } else if (arg === "--paths") {
+      format = "paths";
+    } else {
+      throw new Error(`unknown list argument: ${arg}`);
+    }
+  }
+
+  return { configPath, format };
+}
+
+function parseAerospaceArgs(args: string[]): { configPath?: string; aerospaceConfigPath?: string; write: boolean; reload: boolean } {
+  let configPath: string | undefined;
+  let aerospaceConfigPath: string | undefined;
+  let write = false;
+  let reload = false;
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === "--config" || arg === "-c") {
+      configPath = requireValue(args, index, arg);
+      index += 1;
+    } else if (arg === "--aerospace-config") {
+      aerospaceConfigPath = requireValue(args, index, arg);
+      index += 1;
+    } else if (arg === "--write" || arg === "-w") {
+      write = true;
+    } else if (arg === "--reload") {
+      reload = true;
+      write = true;
+    } else {
+      throw new Error(`unknown aerospace argument: ${arg}`);
+    }
+  }
+
+  return { configPath, aerospaceConfigPath, write, reload };
+}
+
 function build(options: { configPath?: string; force: boolean }): void {
   requireMacos();
   const configPath = findConfigPath(options.configPath);
@@ -211,9 +269,7 @@ function build(options: { configPath?: string; force: boolean }): void {
     mkdirSync(bundle.profileDir, { recursive: true });
     console.log(`    profile at ${bundle.profileDir}`);
 
-    if (bundle.workspace) {
-      aerospaceSnippets.push({ bundleId: bundle.bundleId, workspace: bundle.workspace });
-    }
+    if (bundle.workspace) aerospaceSnippets.push({ bundleId: bundle.bundleId, workspace: bundle.workspace });
   }
 
   printAerospaceSnippets(aerospaceSnippets);
@@ -225,14 +281,90 @@ function build(options: { configPath?: string; force: boolean }): void {
   }
 }
 
-function list(configPathArg?: string): void {
-  const configPath = findConfigPath(configPathArg);
+function list(options: { configPath?: string; format: ListFormat }): void {
+  const configPath = findConfigPath(options.configPath);
   const config = readConfig(configPath);
   const bundles = resolveBundles(config, dirname(configPath));
 
-  for (const bundle of bundles) {
-    const workspace = bundle.workspace ? ` workspace=${bundle.workspace}` : "";
-    console.log(`${bundle.key} app=${bundle.appPath} profile=${bundle.profileDir} id=${bundle.bundleId}${workspace}`);
+  if (options.format === "json") {
+    console.log(JSON.stringify(bundles.map(toListItem), null, 2));
+  } else if (options.format === "paths") {
+    console.log(bundles.map((bundle) => bundle.appPath).join("\n"));
+  } else if (options.format === "wide") {
+    printWideTable(bundles);
+  } else {
+    printTable(bundles);
+  }
+}
+
+function aerospace(options: { configPath?: string; aerospaceConfigPath?: string; write: boolean; reload: boolean }): void {
+  const configPath = findConfigPath(options.configPath);
+  const config = readConfig(configPath);
+  const bundles = resolveBundles(config, dirname(configPath));
+  const rules = aerospaceRules(bundles);
+
+  if (!options.write) {
+    process.stdout.write(rules);
+    return;
+  }
+
+  const aerospaceConfigPath = findAerospaceConfigPath(options.aerospaceConfigPath);
+  const current = existsSync(aerospaceConfigPath) ? readFileSync(aerospaceConfigPath, "utf8") : "";
+  const next = replaceManagedBlock(current, rules);
+  writeFileSync(aerospaceConfigPath, next);
+  console.log(`updated ${aerospaceConfigPath}`);
+
+  if (options.reload) {
+    run("aerospace", ["reload-config"]);
+  }
+}
+
+function toListItem(bundle: ResolvedBundle): Record<string, string | undefined> {
+  return {
+    key: bundle.key,
+    browser: bundle.browser,
+    displayName: bundle.displayName,
+    appPath: bundle.appPath,
+    profileDir: bundle.profileDir,
+    bundleId: bundle.bundleId,
+    workspace: bundle.workspace,
+  };
+}
+
+function printTable(bundles: ResolvedBundle[]): void {
+  const rows = bundles.map((bundle) => [
+    bundle.key,
+    bundle.browser,
+    bundle.displayName,
+    bundle.workspace ?? "",
+    bundle.appName,
+  ]);
+  const headers = ["Key", "Browser", "Name", "Workspace", "App"];
+  printRows(headers, rows);
+}
+
+function printWideTable(bundles: ResolvedBundle[]): void {
+  const rows = bundles.map((bundle) => [
+    bundle.key,
+    bundle.browser,
+    bundle.displayName,
+    bundle.workspace ?? "",
+    bundle.bundleId,
+    bundle.appPath,
+    bundle.profileDir,
+  ]);
+  const headers = ["Key", "Browser", "Name", "Workspace", "Bundle ID", "App Path", "Profile Path"];
+  printRows(headers, rows);
+}
+
+function printRows(headers: string[], rows: string[][]): void {
+  const widths = headers.map((header, index) => Math.max(header.length, ...rows.map((row) => row[index].length)));
+  const formatRow = (row: string[]) => row.map((cell, index) => cell.padEnd(widths[index])).join("  ").trimEnd();
+
+  console.log(formatRow(headers));
+  console.log(formatRow(widths.map((width) => "-".repeat(width))));
+  for (const row of rows) {
+    console.log(formatRow(row));
   }
 }
 
@@ -317,6 +449,7 @@ function resolveBundle(config: Config, entry: BundleConfig, baseDir: string): Re
   }
 
   return {
+    browser: browserName,
     key: entry.key,
     displayName,
     workspace: entry.workspace,
@@ -419,12 +552,60 @@ function printAerospaceSnippets(snippets: Array<{ bundleId: string; workspace: s
   console.log("");
   console.log("AeroSpace rules (paste into ~/.aerospace.toml):");
   console.log("");
-  for (const snippet of snippets) {
-    console.log("[[on-window-detected]]");
-    console.log(`if.app-id = '${snippet.bundleId}'`);
-    console.log(`run = 'move-node-to-workspace ${snippet.workspace}'`);
-    console.log("");
+  process.stdout.write(formatAerospaceRules(snippets));
+}
+
+function aerospaceRules(bundles: ResolvedBundle[]): string {
+  return formatAerospaceRules(
+    bundles
+      .filter((bundle): bundle is ResolvedBundle & { workspace: string } => Boolean(bundle.workspace))
+      .map((bundle) => ({ bundleId: bundle.bundleId, workspace: bundle.workspace })),
+  );
+}
+
+function formatAerospaceRules(snippets: Array<{ bundleId: string; workspace: string }>): string {
+  return snippets
+    .map((snippet) => [
+      "[[on-window-detected]]",
+      `if.app-id = ${tomlString(snippet.bundleId)}`,
+      `run = ${tomlString(`move-node-to-workspace ${snippet.workspace}`)}`,
+      "",
+    ].join("\n"))
+    .join("\n");
+}
+
+function findAerospaceConfigPath(configPath?: string): string {
+  if (configPath) return resolvePath(configPath, process.cwd());
+
+  const candidates = aerospaceConfigCandidates();
+  const existing = candidates.filter((candidate) => existsSync(candidate));
+  if (existing.length > 1) {
+    throw new Error(`multiple AeroSpace configs found. Pass --aerospace-config explicitly: ${existing.join(", ")}`);
   }
+  if (existing.length === 1) {
+    return existing[0];
+  }
+  return candidates[0];
+}
+
+function aerospaceConfigCandidates(): string[] {
+  const xdgConfigHome = process.env.XDG_CONFIG_HOME ? resolvePath(process.env.XDG_CONFIG_HOME, process.cwd()) : join(homedir(), ".config");
+  return [
+    join(homedir(), ".aerospace.toml"),
+    join(xdgConfigHome, "aerospace/aerospace.toml"),
+  ];
+}
+
+function replaceManagedBlock(content: string, rules: string): string {
+  const block = `${AEROSPACE_BEGIN}\n${rules.trimEnd()}\n${AEROSPACE_END}`;
+  const pattern = new RegExp(`${escapeRegExp(AEROSPACE_BEGIN)}[\\s\\S]*?${escapeRegExp(AEROSPACE_END)}`);
+
+  if (pattern.test(content)) {
+    return ensureTrailingNewline(content.replace(pattern, block));
+  }
+
+  const separator = content.trim().length > 0 ? "\n\n" : "";
+  return ensureTrailingNewline(`${content.trimEnd()}${separator}${block}`);
 }
 
 function run(command: string, args: string[], options: { ignoreFailure?: boolean; quiet?: boolean } = {}): void {
@@ -449,6 +630,18 @@ function relativePath(value: string): string {
 
 function shellQuote(value: string): string {
   return `"${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"').replaceAll("$", "\\$").replaceAll("`", "\\`")}"`;
+}
+
+function tomlString(value: string): string {
+  return JSON.stringify(value);
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function ensureTrailingNewline(value: string): string {
+  return value.endsWith("\n") ? value : `${value}\n`;
 }
 
 function requireValue(args: string[], index: number, flag: string): string {
@@ -483,13 +676,15 @@ function printHelp(): void {
 
 Usage:
   browserfi build [--force] [--config .browserfi.toml]
-  browserfi list [--config .browserfi.toml]
+  browserfi list [--wide|--json|--paths] [--config .browserfi.toml]
+  browserfi aerospace [--write] [--reload] [--config .browserfi.toml]
   browserfi init [--config .browserfi.toml]
   browserfi help
 
 Commands:
   build   Create or update browser app bundles.
   list    Print resolved bundle paths, ids, and profiles.
+  aerospace Print or write AeroSpace on-window-detected rules.
   init    Write an example config.
 
 Config lookup:

@@ -79,10 +79,30 @@ bundles from scratch while preserving profile data:
 browserfi build --force
 ```
 
-List resolved app paths, profile paths, bundle ids, and workspaces:
+List configured bundles as a table:
 
 ```bash
 browserfi list
+```
+
+Machine-readable and path-only output are also available:
+
+```bash
+browserfi list --wide
+browserfi list --json
+browserfi list --paths
+```
+
+Print AeroSpace rules:
+
+```bash
+browserfi aerospace
+```
+
+Write those rules into a managed block in your AeroSpace config:
+
+```bash
+browserfi aerospace --write
 ```
 
 Create a starter config:
@@ -156,11 +176,28 @@ Each generated bundle is detectable by app id:
 
 ```toml
 [[on-window-detected]]
-if.app-id = 'com.adrian.chromium-<key>'
-run = 'move-node-to-workspace <workspace>'
+if.app-id = "com.adrian.chromium-<key>"
+run = "move-node-to-workspace <workspace>"
 ```
 
-`browserfi build` prints snippets for every bundle with a `workspace` value.
+`browserfi aerospace` prints rules for every bundle with a `workspace` value.
+`browserfi aerospace --write` updates a managed block in your AeroSpace config:
+
+```toml
+# BEGIN browserfi
+[[on-window-detected]]
+if.app-id = "com.adrian.chromium-user-console-monorepo"
+run = "move-node-to-workspace 6_User_Console"
+# END browserfi
+```
+
+By default, browserfi writes to whichever AeroSpace config exists:
+
+1. `~/.aerospace.toml`
+2. `$XDG_CONFIG_HOME/aerospace/aerospace.toml`, or `~/.config/aerospace/aerospace.toml`
+
+If both exist, pass `--aerospace-config <path>` explicitly. Add `--reload` to run
+`aerospace reload-config` after writing.
 
 ## Project Layout
 
