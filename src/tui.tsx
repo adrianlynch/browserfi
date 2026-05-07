@@ -267,6 +267,7 @@ function Footer({ mode, hasAerospace, needsSave, needsBuild }: { mode: Mode["typ
   if (mode === "edit") {
     return (
       <Box flexDirection="column" marginTop={1}>
+        {needsSave && <Text bold color="green">Unsaved changes (s) to save</Text>}
         <Text color="gray">{rule}</Text>
         <Text color="gray">
           {hasAerospace ? "↑/↓ move fields • enter choose browser/workspace • " : "↑/↓ move fields • enter choose browser • "}
