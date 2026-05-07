@@ -4,18 +4,20 @@ iconsDir = "./icons"
 
 [[bundles]]
 browser = "chromium"
-key = "soracom-design-system-astro"
-displayName = "Soracom Design System"
-workspace = "4_Design_System"
+key = "soracom-design-system-docs"
+displayName = "Soracom Design System Docs"
+workspace = "4_Soracom_Design_System_Docs"
+id = "soracom-design-system-docs"
+icon = "https://assets.soracom.io/icon/soracom/platform/sds.svg"
+iconColor = "#FFFFFF"
+iconBackgroundColor = "#34CDD7"
 
 [[bundles]]
 browser = "chromium"
 key = "user-console-monorepo"
 displayName = "User Console Monorepo"
 workspace = "6_User_Console"
-
-[[bundles]]
-browser = "chromium"
-key = "soracom-design-mockups"
-displayName = "Soracom Design Mockups"
-workspace = "7_Mockups"
+icon = "https://assets.soracom.io/icon/gadgets/laptop.svg"
+iconColor = "#FFFFFF"
+id = "user-console-monorepo"
+iconBackgroundColor = "#7C5CFF"
