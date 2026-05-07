@@ -287,6 +287,7 @@ function Footer({ mode, hasAerospace, needsSave, needsBuild }: { mode: Mode["typ
   }
   return (
     <Box flexDirection="column" marginTop={1}>
+      {needsBuild && <Text bold color="#FFA500">Some apps need to be built (b) to build</Text>}
       <Text color="gray">{rule}</Text>
       <Text color="gray">
         {"↑/↓ select • a add app • enter/e edit • "}
