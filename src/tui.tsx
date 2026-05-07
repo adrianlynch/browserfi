@@ -27,7 +27,17 @@ type AerospaceInfo = {
 
 type Mode =
   | { type: "table" }
-  | { type: "edit"; originalKey?: string; values: EditValues; field: number; fields: EditField[]; browserOptions: string[]; workspaceOptions: string[]; picker?: "browser" | "workspace" }
+  | {
+      type: "edit";
+      originalKey?: string;
+      initialValues: EditValues;
+      values: EditValues;
+      field: number;
+      fields: EditField[];
+      browserOptions: string[];
+      workspaceOptions: string[];
+      picker?: "browser" | "workspace";
+    }
   | { type: "confirm"; message: string; run: () => string };
 
 type EditValues = {
@@ -64,6 +74,8 @@ function BrowserfiTui({ options, onDone, onError }: { options: TuiOptions; onDon
   const selectedBundle = bundles[Math.min(selected, Math.max(0, bundles.length - 1))];
   const fields = editFields(aerospaceInfo);
   const browserOptions = installedBrowsers(loaded.config.bundles);
+  const needsBuild = mode.type === "table" && selectedBundle ? !existsSync(selectedBundle.appPath) : false;
+  const needsSave = mode.type === "edit" && editNeedsSave(mode);
 
   const reload = () => setLoaded(options.loadConfig(loaded.path));
   const done = () => {
@@ -123,9 +135,11 @@ function BrowserfiTui({ options, onDone, onError }: { options: TuiOptions; onDon
       } else if (key.downArrow || input === "j") {
         setSelected((value: number) => Math.min(bundles.length - 1, value + 1));
       } else if ((input === "e" || key.return) && selectedBundle) {
-        setMode({ type: "edit", originalKey: selectedBundle.key, values: editValues(selectedBundle, aerospaceInfo), field: 0, fields, browserOptions: browserOptionsForEdit(browserOptions, selectedBundle.browser), workspaceOptions: aerospaceInfo.workspaces });
+        const values = editValues(selectedBundle, aerospaceInfo);
+        setMode({ type: "edit", originalKey: selectedBundle.key, initialValues: values, values, field: 0, fields, browserOptions: browserOptionsForEdit(browserOptions, selectedBundle.browser), workspaceOptions: aerospaceInfo.workspaces });
       } else if (input === "a") {
-        setMode({ type: "edit", values: newAppValues(loaded.config, aerospaceInfo, browserOptions), field: 0, fields, browserOptions, workspaceOptions: aerospaceInfo.workspaces });
+        const values = newAppValues(loaded.config, aerospaceInfo, browserOptions);
+        setMode({ type: "edit", initialValues: values, values, field: 0, fields, browserOptions, workspaceOptions: aerospaceInfo.workspaces });
       } else if (input === "b" && selectedBundle) {
         options.createOrUpdateBundle(selectedBundle, true, { quiet: true });
         setMessage(`built ${selectedBundle.key}`);
@@ -151,7 +165,7 @@ function BrowserfiTui({ options, onDone, onError }: { options: TuiOptions; onDon
       )}
       {mode.type === "confirm" && <Text color="yellow">{mode.message} y/n</Text>}
       {message && <Text color="cyan">{message}</Text>}
-      <Footer mode={mode.type} hasAerospace={Boolean(aerospaceInfo.configPath)} />
+      <Footer mode={mode.type} hasAerospace={Boolean(aerospaceInfo.configPath)} needsSave={needsSave} needsBuild={needsBuild} />
     </Box>
   );
 }
@@ -248,14 +262,18 @@ function EditForm({ mode, setMode }: { mode: Extract<Mode, { type: "edit" }>; se
   );
 }
 
-function Footer({ mode, hasAerospace }: { mode: Mode["type"]; hasAerospace?: boolean }) {
+function Footer({ mode, hasAerospace, needsSave, needsBuild }: { mode: Mode["type"]; hasAerospace?: boolean; needsSave?: boolean; needsBuild?: boolean }) {
   const { stdout } = useStdout();
   const rule = "─".repeat(Math.max(20, stdout.columns ?? 80));
   if (mode === "edit") {
     return (
       <Box flexDirection="column" marginTop={1}>
         <Text color="gray">{rule}</Text>
-        <Text color="gray">{hasAerospace ? "↑/↓ move fields • enter choose browser/workspace • s save • esc cancel" : "↑/↓ move fields • enter choose browser • s save • esc cancel"}</Text>
+        <Text color="gray">
+          {hasAerospace ? "↑/↓ move fields • enter choose browser/workspace • " : "↑/↓ move fields • enter choose browser • "}
+          <Text bold={needsSave} color={needsSave ? "green" : "gray"}>s save</Text>
+          {" • esc cancel"}
+        </Text>
       </Box>
     );
   }
@@ -271,9 +289,9 @@ function Footer({ mode, hasAerospace }: { mode: Mode["type"]; hasAerospace?: boo
     <Box flexDirection="column" marginTop={1}>
       <Text color="gray">{rule}</Text>
       <Text color="gray">
-        {hasAerospace
-          ? "↑/↓ select • a add app • enter/e edit • b build • d delete app • w aerospace • q quit"
-          : "↑/↓ select • a add app • enter/e edit • b build • d delete app • q quit"}
+        {"↑/↓ select • a add app • enter/e edit • "}
+        <Text bold={needsBuild} color={needsBuild ? "#FFA500" : "gray"}>b build</Text>
+        {hasAerospace ? " • d delete app • w aerospace • q quit" : " • d delete app • q quit"}
       </Text>
     </Box>
   );
@@ -310,6 +328,11 @@ function tableWidths(columns: number, showWorkspace: boolean): number[] {
 
 function sum(values: number[]): number {
   return values.reduce((total, value) => total + value, 0);
+}
+
+function editNeedsSave(mode: Extract<Mode, { type: "edit" }>): boolean {
+  if (!mode.originalKey) return true;
+  return mode.fields.some((field) => mode.values[field.key] !== mode.initialValues[field.key]);
 }
 
 function fit(value: string, width: number): string {
