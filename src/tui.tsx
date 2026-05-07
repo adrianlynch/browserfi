@@ -377,7 +377,7 @@ function EditForm({ mode, setMode, theme }: { mode: Extract<Mode, { type: "edit"
   return (
     <Box flexDirection="column">
       <Text bold>{mode.originalKey ? `Edit ${mode.originalKey}` : "Add new app"}</Text>
-      <Box borderStyle="round" borderColor="gray" flexDirection="column" paddingX={EDIT_PADDING_X} paddingBottom={1}>
+      <Box borderStyle="round" borderColor="gray" flexDirection="column" paddingX={EDIT_PADDING_X} paddingTop={1} paddingBottom={1}>
         {mode.fields.map((item, index) => (
           <Box key={item.key}>
             <Box width={EDIT_LABEL_WIDTH}>
