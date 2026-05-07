@@ -144,9 +144,12 @@ function BrowserfiTui({ options, onDone, onError }: { options: TuiOptions; onDon
 
 function Header({ configPath }: { configPath: string }) {
   return (
-    <Box marginBottom={1}>
-      <Text bold>browserfi</Text>
-      <Text color="gray">  {configPath}</Text>
+    <Box flexDirection="column" marginBottom={1}>
+      <Box>
+        <Text bold>browserfi</Text>
+        <Text color="gray">  {configPath}</Text>
+      </Box>
+      <Text color="gray">Manage per-context browser apps. Select a row, then use the shortcuts below.</Text>
     </Box>
   );
 }
