@@ -339,7 +339,7 @@ async function tui(configPathArg?: string): Promise<void> {
       message: "browserfi",
       choices: [
         ...bundles.map((bundle) => ({
-          name: `${bundle.key}  (${bundle.displayName})`,
+          name: `${existsSync(bundle.appPath) ? "installed" : "missing"}  ${bundle.key}  (${bundle.displayName})`,
           value: `bundle:${bundle.key}`,
           description: `${bundle.browser} -> ${bundle.workspace ?? "no workspace"}`,
         })),
@@ -373,6 +373,7 @@ async function tui(configPathArg?: string): Promise<void> {
         { name: "Force rebuild app", value: "rebuild" },
         { name: "Remove generated app", value: "remove-app" },
         { name: "Remove generated app and profile", value: "remove-all" },
+        { name: "Remove bundle from config", value: "remove-config" },
         { name: "Back", value: "back" },
       ],
     });
@@ -386,9 +387,11 @@ async function tui(configPathArg?: string): Promise<void> {
     } else if (bundleAction === "rebuild") {
       createOrUpdateBundle(bundle, true);
     } else if (bundleAction === "remove-app") {
-      await removeBundleInteractive(bundle, false);
+      if (await removeBundleInteractive(loaded, bundle, false)) loaded = loadConfig(loaded.path);
     } else if (bundleAction === "remove-all") {
-      await removeBundleInteractive(bundle, true);
+      if (await removeBundleInteractive(loaded, bundle, true)) loaded = loadConfig(loaded.path);
+    } else if (bundleAction === "remove-config") {
+      if (await removeConfigEntryInteractive(loaded, bundle.key)) loaded = loadConfig(loaded.path);
     }
   }
 }
@@ -414,11 +417,32 @@ async function editBundle(loaded: LoadedConfig, key: string): Promise<void> {
   console.log(`updated ${loaded.path}`);
 }
 
-async function removeBundleInteractive(bundle: ResolvedBundle, deleteProfile: boolean): Promise<void> {
+async function removeBundleInteractive(loaded: LoadedConfig, bundle: ResolvedBundle, deleteProfile: boolean): Promise<boolean> {
   const target = deleteProfile ? `${bundle.appPath} and ${bundle.profileDir}` : bundle.appPath;
   const ok = await confirm({ message: `Remove ${target}?`, default: false });
-  if (!ok) return;
+  if (!ok) return false;
   removeBundle(bundle, deleteProfile);
+  const removeFromConfig = await confirm({ message: `Remove ${bundle.key} from ${loaded.path}?`, default: true });
+  if (!removeFromConfig) return false;
+  removeConfigEntry(loaded, bundle.key);
+  return true;
+}
+
+async function removeConfigEntryInteractive(loaded: LoadedConfig, key: string): Promise<boolean> {
+  const ok = await confirm({ message: `Remove ${key} from ${loaded.path}? Generated app/profile are left untouched.`, default: false });
+  if (!ok) return false;
+  removeConfigEntry(loaded, key);
+  return true;
+}
+
+function removeConfigEntry(loaded: LoadedConfig, key: string): void {
+  const before = loaded.config.bundles.length;
+  loaded.config.bundles = loaded.config.bundles.filter((bundle) => bundle.key !== key);
+  if (loaded.config.bundles.length === before) {
+    throw new Error(`bundle not found in config: ${key}`);
+  }
+  writeConfig(loaded.path, loaded.config);
+  console.log(`removed ${key} from ${loaded.path}`);
 }
 
 function toListItem(bundle: ResolvedBundle): Record<string, string | undefined> {
@@ -611,7 +635,7 @@ function createOrUpdateBundle(bundle: ResolvedBundle, force: boolean): boolean {
 
   if (!existsSync(bundle.appPath)) {
     console.log(`    copying ${bundle.sourceApp} -> ${bundle.appPath}`);
-    cpSync(bundle.sourceApp, bundle.appPath, { recursive: true });
+    copyAppBundle(bundle.sourceApp, bundle.appPath);
     configureBundle(bundle);
     changed = true;
   } else {
@@ -619,6 +643,10 @@ function createOrUpdateBundle(bundle: ResolvedBundle, force: boolean): boolean {
   }
 
   return changed;
+}
+
+function copyAppBundle(sourceApp: string, appPath: string): void {
+  run("/bin/cp", ["-R", sourceApp, appPath]);
 }
 
 function removeBundle(bundle: ResolvedBundle, deleteProfile: boolean): void {
