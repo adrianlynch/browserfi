@@ -206,13 +206,30 @@ function EditForm({ mode, setMode }: { mode: Extract<Mode, { type: "edit" }>; se
 }
 
 function Footer({ mode }: { mode: Mode["type"] }) {
+  const { stdout } = useStdout();
+  const rule = "─".repeat(Math.max(20, stdout.columns ?? 80));
   if (mode === "edit") {
-    return <Text color="gray">tab/enter next field • esc cancel • save on final field</Text>;
+    return (
+      <Box flexDirection="column" marginTop={1}>
+        <Text color="gray">{rule}</Text>
+        <Text color="gray">tab/enter next field • esc cancel • save on final field</Text>
+      </Box>
+    );
   }
   if (mode === "confirm") {
-    return <Text color="gray">y confirm • n/esc cancel</Text>;
+    return (
+      <Box flexDirection="column" marginTop={1}>
+        <Text color="gray">{rule}</Text>
+        <Text color="gray">y confirm • n/esc cancel</Text>
+      </Box>
+    );
   }
-  return <Text color="gray">↑/↓ select • a add app • enter/e edit • b build • f rebuild • d delete app • B build all • w aerospace • q quit</Text>;
+  return (
+    <Box flexDirection="column" marginTop={1}>
+      <Text color="gray">{rule}</Text>
+      <Text color="gray">↑/↓ select • a add app • enter/e edit • b build • f rebuild • d delete app • B build all • w aerospace • q quit</Text>
+    </Box>
+  );
 }
 
 function row(values: string[], widths: number[]): string {
