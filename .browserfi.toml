@@ -1,0 +1,21 @@
+installDir = "/Applications"
+profilesDir = "~/ChromiumProfiles"
+iconsDir = "./icons"
+
+[[bundles]]
+browser = "chromium"
+key = "soracom-design-system-astro"
+displayName = "Soracom Design System"
+workspace = "4_Design_System"
+
+[[bundles]]
+browser = "chromium"
+key = "user-console-monorepo"
+displayName = "User Console Monorepo"
+workspace = "6_User_Console"
+
+[[bundles]]
+browser = "chromium"
+key = "soracom-design-mockups"
+displayName = "Soracom Design Mockups"
+workspace = "7_Mockups"

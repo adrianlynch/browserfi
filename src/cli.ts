@@ -1,0 +1,538 @@
+#!/usr/bin/env node
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, cpSync, renameSync, writeFileSync, chmodSync, utimesSync } from "node:fs";
+import { tmpdir, homedir } from "node:os";
+import { dirname, isAbsolute, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { parse as parseToml } from "smol-toml";
+
+type BrowserName = "chromium" | "chrome" | "chrome-canary" | "brave" | "edge" | "firefox";
+
+type BundleConfig = {
+  browser?: BrowserName;
+  key: string;
+  displayName?: string;
+  workspace?: string;
+  sourceApp?: string;
+  installDir?: string;
+  profilesDir?: string;
+  iconsDir?: string;
+  bundleIdPrefix?: string;
+  appNamePrefix?: string;
+  executableName?: string;
+};
+
+type Config = {
+  installDir?: string;
+  profilesDir?: string;
+  iconsDir?: string;
+  bundles: BundleConfig[];
+};
+
+type BrowserDefinition = {
+  sourceApp: string;
+  executableName: string;
+  bundleIdPrefix: string;
+  appNamePrefix: string;
+  profileArgs: (profileDir: string) => string[];
+};
+
+type ResolvedBundle = {
+  key: string;
+  displayName: string;
+  workspace?: string;
+  sourceApp: string;
+  appName: string;
+  appPath: string;
+  bundleId: string;
+  profileDir: string;
+  executableName: string;
+  profileArgs: string[];
+  iconsDir: string;
+};
+
+const DEFAULT_CONFIG = ".browserfi.toml";
+const KEY_PATTERN = /^[A-Za-z0-9._-]+$/;
+const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
+
+const BROWSERS: Record<BrowserName, BrowserDefinition> = {
+  chromium: {
+    sourceApp: "/Applications/Chromium.app",
+    executableName: "Chromium",
+    bundleIdPrefix: "com.adrian.chromium",
+    appNamePrefix: "chromium",
+    profileArgs: (profileDir) => [`--user-data-dir=${profileDir}`],
+  },
+  chrome: {
+    sourceApp: "/Applications/Google Chrome.app",
+    executableName: "Google Chrome",
+    bundleIdPrefix: "com.adrian.chrome",
+    appNamePrefix: "chrome",
+    profileArgs: (profileDir) => [`--user-data-dir=${profileDir}`],
+  },
+  "chrome-canary": {
+    sourceApp: "/Applications/Google Chrome Canary.app",
+    executableName: "Google Chrome Canary",
+    bundleIdPrefix: "com.adrian.chrome-canary",
+    appNamePrefix: "chrome-canary",
+    profileArgs: (profileDir) => [`--user-data-dir=${profileDir}`],
+  },
+  brave: {
+    sourceApp: "/Applications/Brave Browser.app",
+    executableName: "Brave Browser",
+    bundleIdPrefix: "com.adrian.brave",
+    appNamePrefix: "brave",
+    profileArgs: (profileDir) => [`--user-data-dir=${profileDir}`],
+  },
+  edge: {
+    sourceApp: "/Applications/Microsoft Edge.app",
+    executableName: "Microsoft Edge",
+    bundleIdPrefix: "com.adrian.edge",
+    appNamePrefix: "edge",
+    profileArgs: (profileDir) => [`--user-data-dir=${profileDir}`],
+  },
+  firefox: {
+    sourceApp: "/Applications/Firefox.app",
+    executableName: "firefox",
+    bundleIdPrefix: "com.adrian.firefox",
+    appNamePrefix: "firefox",
+    profileArgs: (profileDir) => ["-profile", profileDir, "-no-remote"],
+  },
+};
+
+function main(): void {
+  try {
+    const args = process.argv.slice(2);
+    const command = args[0] && !args[0].startsWith("-") ? args.shift() : "build";
+
+    switch (command) {
+      case "build":
+        build(parseBuildArgs(args));
+        break;
+      case "list":
+        list(parseConfigPath(args));
+        break;
+      case "init":
+        init(args);
+        break;
+      case "help":
+      case "--help":
+      case "-h":
+        printHelp();
+        break;
+      case "version":
+      case "--version":
+      case "-v":
+        printVersion();
+        break;
+      default:
+        throw new Error(`unknown command: ${command}`);
+    }
+  } catch (error) {
+    console.error(`error: ${error instanceof Error ? error.message : String(error)}`);
+    process.exit(1);
+  }
+}
+
+function parseBuildArgs(args: string[]): { configPath?: string; force: boolean } {
+  let configPath: string | undefined;
+  let force = false;
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === "--force" || arg === "-f") {
+      force = true;
+    } else if (arg === "--config" || arg === "-c") {
+      configPath = requireValue(args, index, arg);
+      index += 1;
+    } else {
+      throw new Error(`unknown build argument: ${arg}`);
+    }
+  }
+
+  return { configPath, force };
+}
+
+function parseConfigPath(args: string[]): string | undefined {
+  let configPath: string | undefined;
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === "--config" || arg === "-c") {
+      configPath = requireValue(args, index, arg);
+      index += 1;
+    } else {
+      throw new Error(`unknown argument: ${arg}`);
+    }
+  }
+  return configPath;
+}
+
+function build(options: { configPath?: string; force: boolean }): void {
+  requireMacos();
+  const configPath = findConfigPath(options.configPath);
+  const config = readConfig(configPath);
+  const bundles = resolveBundles(config, dirname(configPath));
+  const aerospaceSnippets: Array<{ bundleId: string; workspace: string }> = [];
+  let iconsChanged = false;
+
+  for (const bundle of bundles) {
+    console.log(`==> ${bundle.appName}`);
+    let changed = false;
+
+    if (existsSync(bundle.appPath) && options.force) {
+      console.log("    removing existing bundle");
+      rmSync(bundle.appPath, { recursive: true, force: true });
+    }
+
+    if (!existsSync(bundle.appPath)) {
+      console.log(`    copying ${bundle.sourceApp} -> ${bundle.appPath}`);
+      cpSync(bundle.sourceApp, bundle.appPath, { recursive: true });
+      configureBundle(bundle);
+      changed = true;
+    } else {
+      console.log("    bundle exists (use --force to rebuild)");
+    }
+
+    if (applyIcon(bundle)) {
+      console.log(`    applied icon from ${relativePath(join(bundle.iconsDir, `${bundle.key}.*`))}`);
+      iconsChanged = true;
+      changed = true;
+    }
+
+    if (changed) {
+      console.log("    stripping quarantine + extended attrs");
+      run("xattr", ["-cr", bundle.appPath]);
+      console.log("    re-signing ad-hoc");
+      run("codesign", ["--force", "--deep", "--sign", "-", bundle.appPath]);
+      touch(bundle.appPath);
+      refreshLaunchServices(bundle.appPath);
+    }
+
+    mkdirSync(bundle.profileDir, { recursive: true });
+    console.log(`    profile at ${bundle.profileDir}`);
+
+    if (bundle.workspace) {
+      aerospaceSnippets.push({ bundleId: bundle.bundleId, workspace: bundle.workspace });
+    }
+  }
+
+  printAerospaceSnippets(aerospaceSnippets);
+
+  if (iconsChanged) {
+    console.log("Icons updated. Refreshing Dock and Finder so the new icons appear...");
+    run("killall", ["Dock"], { ignoreFailure: true });
+    run("killall", ["Finder"], { ignoreFailure: true });
+  }
+}
+
+function list(configPathArg?: string): void {
+  const configPath = findConfigPath(configPathArg);
+  const config = readConfig(configPath);
+  const bundles = resolveBundles(config, dirname(configPath));
+
+  for (const bundle of bundles) {
+    const workspace = bundle.workspace ? ` workspace=${bundle.workspace}` : "";
+    console.log(`${bundle.key} app=${bundle.appPath} profile=${bundle.profileDir} id=${bundle.bundleId}${workspace}`);
+  }
+}
+
+function init(args: string[]): void {
+  const configPath = parseConfigPath(args) ?? DEFAULT_CONFIG;
+  const dest = resolvePath(configPath, process.cwd());
+  if (existsSync(dest)) {
+    throw new Error(`${dest} already exists`);
+  }
+  const examplePath = resolve(SCRIPT_DIR, "../browserfi.example.toml");
+  if (dest.endsWith(".json")) {
+    writeFileSync(dest, `${JSON.stringify(EXAMPLE_CONFIG, null, 2)}\n`);
+  } else {
+    cpSync(examplePath, dest);
+  }
+  console.log(`wrote ${dest}`);
+}
+
+function readConfig(configPath: string): Config {
+  if (!existsSync(configPath)) {
+    throw new Error(`config not found at ${configPath}`);
+  }
+  const raw = readFileSync(configPath, "utf8");
+  const config = configPath.endsWith(".json") ? JSON.parse(raw) as Config : parseToml(raw) as unknown as Config;
+  if (!Array.isArray(config.bundles)) {
+    throw new Error("config must contain a bundles array");
+  }
+  return config;
+}
+
+function findConfigPath(configPath?: string): string {
+  if (configPath) {
+    return resolvePath(configPath, process.cwd());
+  }
+
+  const candidates = configCandidates();
+  const found = candidates.find((candidate) => existsSync(candidate));
+  if (found) {
+    return found;
+  }
+
+  throw new Error(`config not found. Looked in: ${candidates.join(", ")}`);
+}
+
+function configCandidates(): string[] {
+  const xdgConfigHome = process.env.XDG_CONFIG_HOME ? resolvePath(process.env.XDG_CONFIG_HOME, process.cwd()) : join(homedir(), ".config");
+  return [
+    resolve(process.cwd(), ".browserfi.toml"),
+    resolve(process.cwd(), "browserfi.toml"),
+    join(xdgConfigHome, "browserfi/browserfi.toml"),
+    join(homedir(), ".browserfi.toml"),
+  ];
+}
+
+function resolveBundles(config: Config, baseDir: string): ResolvedBundle[] {
+  return config.bundles.map((entry) => resolveBundle(config, entry, baseDir));
+}
+
+function resolveBundle(config: Config, entry: BundleConfig, baseDir: string): ResolvedBundle {
+  const browserName = entry.browser ?? "chromium";
+  const browser = BROWSERS[browserName];
+  if (!browser) {
+    throw new Error(`unsupported browser: ${browserName}`);
+  }
+  if (!entry.key || !KEY_PATTERN.test(entry.key)) {
+    throw new Error(`invalid bundle key "${entry.key}". Use only letters, numbers, dots, underscores, and hyphens.`);
+  }
+
+  const installDir = resolvePath(entry.installDir ?? config.installDir ?? "/Applications", baseDir);
+  const profilesDir = resolvePath(entry.profilesDir ?? config.profilesDir ?? "~/BrowserProfiles", baseDir);
+  const iconsDir = resolvePath(entry.iconsDir ?? config.iconsDir ?? "./icons", baseDir);
+  const sourceApp = resolvePath(entry.sourceApp ?? browser.sourceApp, baseDir);
+  const bundleIdPrefix = entry.bundleIdPrefix ?? browser.bundleIdPrefix;
+  const appNamePrefix = entry.appNamePrefix ?? browser.appNamePrefix;
+  const executableName = entry.executableName ?? browser.executableName;
+  const displayName = entry.displayName ?? `${titleCase(browserName)} ${entry.key}`;
+  const appName = `${appNamePrefix}-${entry.key}`;
+  const profileDir = join(profilesDir, entry.key);
+
+  if (!existsSync(sourceApp)) {
+    throw new Error(`source app not found at ${sourceApp}`);
+  }
+
+  return {
+    key: entry.key,
+    displayName,
+    workspace: entry.workspace,
+    sourceApp,
+    appName,
+    appPath: join(installDir, `${appName}.app`),
+    bundleId: `${bundleIdPrefix}-${entry.key}`,
+    profileDir,
+    executableName,
+    profileArgs: browser.profileArgs(profileDir),
+    iconsDir,
+  };
+}
+
+function configureBundle(bundle: ResolvedBundle): void {
+  console.log("    setting bundle id and display name");
+  const plist = join(bundle.appPath, "Contents/Info.plist");
+  plistBuddy(["Set", ":CFBundleIdentifier", bundle.bundleId], plist);
+  plistBuddy(["Set", ":CFBundleName", bundle.displayName], plist);
+  plistBuddy(["Set", ":CFBundleDisplayName", bundle.displayName], plist);
+  plistBuddy(["Delete", ":CFBundleIconName"], plist, { ignoreFailure: true });
+
+  const executableDir = join(bundle.appPath, "Contents/MacOS");
+  const executablePath = join(executableDir, bundle.executableName);
+  const realExecutablePath = `${executablePath}-real`;
+  if (!existsSync(realExecutablePath)) {
+    renameSync(executablePath, realExecutablePath);
+  }
+  writeFileSync(executablePath, wrapperScript(bundle), { mode: 0o755 });
+  chmodSync(executablePath, 0o755);
+}
+
+function wrapperScript(bundle: ResolvedBundle): string {
+  const args = bundle.profileArgs.map(shellQuote).join(" ");
+  return `#!/bin/bash\nexec "$(dirname "$0")/${bundle.executableName}-real" ${args} "$@"\n`;
+}
+
+function applyIcon(bundle: ResolvedBundle): boolean {
+  const icns = join(bundle.iconsDir, `${bundle.key}.icns`);
+  const png = join(bundle.iconsDir, `${bundle.key}.png`);
+  const dest = join(bundle.appPath, "Contents/Resources/app.icns");
+
+  if (existsSync(icns)) {
+    cpSync(icns, dest);
+    return true;
+  }
+
+  if (existsSync(png)) {
+    pngToIcns(png, dest);
+    return true;
+  }
+
+  return false;
+}
+
+function pngToIcns(src: string, dest: string): void {
+  const work = mkdtempSync(join(tmpdir(), "browserfi-"));
+  const iconset = join(work, "icon.iconset");
+  mkdirSync(iconset);
+
+  try {
+    const sizes: Array<[number, string]> = [
+      [16, "icon_16x16.png"],
+      [32, "icon_16x16@2x.png"],
+      [32, "icon_32x32.png"],
+      [64, "icon_32x32@2x.png"],
+      [128, "icon_128x128.png"],
+      [256, "icon_128x128@2x.png"],
+      [256, "icon_256x256.png"],
+      [512, "icon_256x256@2x.png"],
+      [512, "icon_512x512.png"],
+      [1024, "icon_512x512@2x.png"],
+    ];
+
+    for (const [size, filename] of sizes) {
+      run("sips", ["-z", String(size), String(size), src, "--out", join(iconset, filename)], { quiet: true });
+    }
+
+    run("iconutil", ["-c", "icns", iconset, "-o", dest]);
+  } finally {
+    rmSync(work, { recursive: true, force: true });
+  }
+}
+
+function plistBuddy(command: string[], plist: string, options: { ignoreFailure?: boolean } = {}): void {
+  run("/usr/libexec/PlistBuddy", ["-c", command.join(" "), plist], options);
+}
+
+function refreshLaunchServices(appPath: string): void {
+  const lsregister = "/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Versions/A/Support/lsregister";
+  run(lsregister, ["-u", appPath], { ignoreFailure: true, quiet: true });
+  run(lsregister, ["-f", appPath], { ignoreFailure: true, quiet: true });
+}
+
+function printAerospaceSnippets(snippets: Array<{ bundleId: string; workspace: string }>): void {
+  if (snippets.length === 0) {
+    return;
+  }
+
+  console.log("");
+  console.log("AeroSpace rules (paste into ~/.aerospace.toml):");
+  console.log("");
+  for (const snippet of snippets) {
+    console.log("[[on-window-detected]]");
+    console.log(`if.app-id = '${snippet.bundleId}'`);
+    console.log(`run = 'move-node-to-workspace ${snippet.workspace}'`);
+    console.log("");
+  }
+}
+
+function run(command: string, args: string[], options: { ignoreFailure?: boolean; quiet?: boolean } = {}): void {
+  try {
+    execFileSync(command, args, { stdio: options.quiet ? "ignore" : "inherit" });
+  } catch (error) {
+    if (!options.ignoreFailure) {
+      throw error;
+    }
+  }
+}
+
+function resolvePath(value: string, baseDir: string): string {
+  const expanded = value === "~" ? homedir() : value.startsWith("~/") ? join(homedir(), value.slice(2)) : value;
+  return isAbsolute(expanded) ? expanded : resolve(baseDir, expanded);
+}
+
+function relativePath(value: string): string {
+  const cwd = process.cwd();
+  return value.startsWith(cwd) ? value.slice(cwd.length + 1) : value;
+}
+
+function shellQuote(value: string): string {
+  return `"${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"').replaceAll("$", "\\$").replaceAll("`", "\\`")}"`;
+}
+
+function requireValue(args: string[], index: number, flag: string): string {
+  const value = args[index + 1];
+  if (!value) {
+    throw new Error(`${flag} requires a value`);
+  }
+  return value;
+}
+
+function titleCase(value: string): string {
+  return value
+    .split(/[-_]/)
+    .filter(Boolean)
+    .map((part) => `${part[0]?.toUpperCase() ?? ""}${part.slice(1)}`)
+    .join(" ");
+}
+
+function touch(path: string): void {
+  const now = new Date();
+  utimesSync(path, now, now);
+}
+
+function requireMacos(): void {
+  if (process.platform !== "darwin") {
+    throw new Error("browserfi only supports macOS");
+  }
+}
+
+function printHelp(): void {
+  console.log(`browserfi
+
+Usage:
+  browserfi build [--force] [--config .browserfi.toml]
+  browserfi list [--config .browserfi.toml]
+  browserfi init [--config .browserfi.toml]
+  browserfi help
+
+Commands:
+  build   Create or update browser app bundles.
+  list    Print resolved bundle paths, ids, and profiles.
+  init    Write an example config.
+
+Config lookup:
+  ./.browserfi.toml
+  ./browserfi.toml
+  ~/.config/browserfi/browserfi.toml
+  ~/.browserfi.toml
+
+Supported browsers:
+  ${Object.keys(BROWSERS).join(", ")}
+`);
+}
+
+function printVersion(): void {
+  const packagePath = resolve(SCRIPT_DIR, "../package.json");
+  const pkg = JSON.parse(readFileSync(packagePath, "utf8")) as { version?: string };
+  console.log(pkg.version ?? "0.0.0");
+}
+
+const EXAMPLE_CONFIG: Config = {
+  installDir: "/Applications",
+  profilesDir: "~/BrowserProfiles",
+  iconsDir: "./icons",
+  bundles: [
+    {
+      browser: "chromium",
+      key: "my-project",
+      displayName: "My Project",
+      workspace: "4_Project",
+    },
+    {
+      browser: "chrome",
+      key: "work",
+      displayName: "Chrome Work",
+      workspace: "5_Work",
+    },
+    {
+      browser: "firefox",
+      key: "docs",
+      displayName: "Firefox Docs",
+      workspace: "6_Docs",
+    },
+  ],
+};
+
+main();

@@ -1,0 +1,21 @@
+installDir = "/Applications"
+profilesDir = "~/BrowserProfiles"
+iconsDir = "./icons"
+
+[[bundles]]
+browser = "chromium"
+key = "my-project"
+displayName = "My Project"
+workspace = "4_Project"
+
+[[bundles]]
+browser = "chrome"
+key = "work"
+displayName = "Chrome Work"
+workspace = "5_Work"
+
+[[bundles]]
+browser = "firefox"
+key = "docs"
+displayName = "Firefox Docs"
+workspace = "6_Docs"

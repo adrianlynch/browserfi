@@ -1,85 +1,158 @@
-# bundle-chromium
+# browserfi
 
-Per-context Chromium app bundles for macOS. Each bundle has its own bundle id,
-display name, icon, and `--user-data-dir` profile, so AeroSpace (or any window
-manager that routes by app id) can send each browser to its own workspace, and
-each context gets independent cookies, extensions, localStorage, and restored
-sessions.
+Per-context browser app bundles for macOS. Each generated `.app` gets its own
+bundle id, display name, icon, and profile directory, so AeroSpace or any window
+manager that routes by app id can send each browser context to its own
+workspace.
 
 ## Why
 
-A single Chromium app shares one bundle id, one profile, and one localStorage
-namespace. That makes it impossible to:
+A single browser app normally shares one bundle id, one profile, and one storage
+namespace. That makes it hard to:
 
-- route different Chromium windows to different AeroSpace workspaces by app id,
-- keep two dev servers on `localhost:4321` from stomping on each other's
-  storage,
-- have different signed-in sessions per project.
+- route different browser windows to different AeroSpace workspaces by app id,
+- keep multiple local dev servers from sharing localStorage and cookies,
+- use different signed-in sessions per project.
 
-Duplicating the `.app` with a fresh bundle id and a wrapper that pins
-`--user-data-dir` solves all three.
+browserfi duplicates the source browser `.app`, changes its metadata, installs a
+small launcher wrapper that pins the profile path, applies a custom icon, and
+re-signs the result ad-hoc.
 
 ## Requirements
 
 - macOS
-- `/Applications/Chromium.app` (or set `SOURCE_APP` in `bundles.conf`)
-- Built-in tools only: `codesign`, `PlistBuddy`, `sips`, `iconutil`,
-  `lsregister`. No Homebrew dependencies.
+- Node.js 20+
+- One or more supported browsers installed in `/Applications`
+- Built-in macOS tools: `codesign`, `PlistBuddy`, `sips`, `iconutil`, `xattr`,
+  and `lsregister`
 
-## Quick start
+Supported browser adapters:
 
-1. Edit [bundles.conf](bundles.conf) — list the contexts you want. Each entry
-   is `key|display_name|workspace`.
-2. (Optional) Build icons for each key — see [Custom icons](#custom-icons).
-3. Run `./make-bundles.sh`.
+- `chromium`
+- `chrome`
+- `chrome-canary`
+- `brave`
+- `edge`
+- `firefox`
 
-The script creates one `.app` per entry in `/Applications`, wires up its
-profile under `~/ChromiumProfiles/<key>/`, and prints AeroSpace
-`[[on-window-detected]]` snippets for any entries with a workspace set.
+Safari is intentionally unsupported because it does not expose a clean
+per-launch profile directory flag.
 
-Re-running is safe: existing bundles are skipped (icons are still re-applied).
-Pass `--force` to fully rebuild a bundle from scratch — profile data is
-preserved either way.
+## Install
 
-## Custom icons
+From npm, once published:
 
-Drop a square PNG (1024×1024 ideal) or a pre-built `.icns` into `icons/`,
+```bash
+npm install -g browserfi
+```
+
+From source:
+
+```bash
+npm install
+npm run build
+./dist/cli.js help
+```
+
+Homebrew support should be packaged as a tap formula that installs the npm
+package or a built release artifact:
+
+```bash
+brew install adrianlynch/tap/browserfi
+```
+
+## Quick Start
+
+1. Edit [.browserfi.toml](.browserfi.toml).
+2. Drop optional per-bundle icons into `icons/<key>.png` or `icons/<key>.icns`.
+3. Run:
+
+```bash
+browserfi build
+```
+
+Re-running is safe: existing bundles are skipped, icons are still re-applied,
+and changed bundles are re-signed. Pass `--force` to rebuild generated `.app`
+bundles from scratch while preserving profile data:
+
+```bash
+browserfi build --force
+```
+
+List resolved app paths, profile paths, bundle ids, and workspaces:
+
+```bash
+browserfi list
+```
+
+Create a starter config:
+
+```bash
+browserfi init
+```
+
+## Config
+
+browserfi uses TOML because it is comfortable to edit by hand: comments are
+allowed, values are not indentation-sensitive, and repeated `[[bundles]]`
+sections read cleanly.
+
+Config lookup order:
+
+1. `./.browserfi.toml`
+2. `./browserfi.toml`
+3. `$XDG_CONFIG_HOME/browserfi/browserfi.toml`, or `~/.config/browserfi/browserfi.toml`
+4. `~/.browserfi.toml`
+
+```toml
+installDir = "/Applications"
+profilesDir = "~/ChromiumProfiles"
+iconsDir = "./icons"
+
+[[bundles]]
+browser = "chromium"
+key = "user-console-monorepo"
+displayName = "User Console Monorepo"
+workspace = "6_User_Console"
+```
+
+Each bundle supports:
+
+- `browser`: one of the supported adapters; defaults to `chromium`
+- `key`: stable identifier used in app names, bundle ids, profiles, and icons
+- `displayName`: Dock and menu bar name
+- `workspace`: optional AeroSpace workspace for printed rules
+- `sourceApp`: optional override for the source `.app`
+- `installDir`, `profilesDir`, `iconsDir`: optional per-bundle path overrides
+- `bundleIdPrefix`, `appNamePrefix`, `executableName`: advanced overrides
+
+Keys may contain only letters, numbers, dots, underscores, and hyphens.
+
+## Custom Icons
+
+Drop a square PNG, ideally `1024x1024`, or a pre-built `.icns` into `icons/`,
 named after the bundle key:
 
-```
+```text
 icons/<key>.png
 icons/<key>.icns
 ```
 
-`make-bundles.sh` picks them up by convention, converts PNG → ICNS via
-`sips` + `iconutil`, replaces `Contents/Resources/app.icns`, deletes the
-`CFBundleIconName` key from `Info.plist` (so macOS reads `app.icns` instead of
-the Chromium `Assets.car`), re-signs ad-hoc, and refreshes Launch Services so
-the new icon appears immediately.
+`browserfi build` picks them up by convention, converts PNG files to ICNS with
+`sips` and `iconutil`, replaces `Contents/Resources/app.icns`, deletes
+`CFBundleIconName` from `Info.plist`, re-signs ad-hoc, and refreshes Launch
+Services.
 
-### Building from an SVG
-
-`build-icon.sh` composes a macOS-style icon (squircle background, centered
-glyph) from a source SVG:
+The legacy helper [build-icon.sh](build-icon.sh) can still build a simple
+macOS-style PNG from an SVG:
 
 ```bash
 ./build-icon.sh <key> <svg-url-or-path>
 ```
 
-Defaults to white glyph on a celeste (`#34CDD7`) squircle. Override with env
-vars:
+## AeroSpace
 
-```bash
-BG_COLOR='#FF6B6B' FG_COLOR='#FFFFFF' \
-  ./build-icon.sh my-context https://example.com/icon.svg
-```
-
-The result is written to `icons/<key>.png`. Run `./make-bundles.sh` afterwards
-to apply it to the bundle.
-
-## AeroSpace integration
-
-Each bundle is detectable by app id:
+Each generated bundle is detectable by app id:
 
 ```toml
 [[on-window-detected]]
@@ -87,24 +160,24 @@ if.app-id = 'com.adrian.chromium-<key>'
 run = 'move-node-to-workspace <workspace>'
 ```
 
-`make-bundles.sh` prints these snippets for every entry that has a workspace
-set in `bundles.conf`. Paste them into `~/.aerospace.toml`.
+`browserfi build` prints snippets for every bundle with a `workspace` value.
 
-## Project layout
+## Project Layout
 
-```
-bundles.conf      # bundle definitions and global defaults
-make-bundles.sh   # creates / updates the .apps from bundles.conf
-build-icon.sh     # builds a white-on-celeste squircle PNG from a source SVG
-icons/            # per-bundle icon files (<key>.png or <key>.icns)
+```text
+src/                    TypeScript CLI source
+.browserfi.toml         Local bundle config
+browserfi.example.toml  Starter config for browserfi init
+icons/                  Per-bundle icon files
+make-bundles.sh         Legacy Bash implementation
+build-icon.sh           Legacy SVG-to-PNG icon helper
 ```
 
 ## Caveats
 
-- **Code signing.** Bundles are re-signed ad-hoc, so they don't have full
-  Gatekeeper trust. First launch may need **System Settings → Privacy &
-  Security → Open Anyway** (the right-click → Open shortcut was removed in
-  Sequoia). Subsequent launches are unrestricted.
-- **Updates.** Chromium's auto-updater checks the original install path and
-  won't propagate to duplicated bundles. Re-run `./make-bundles.sh --force`
-  after updating Chromium itself.
+- Bundles are re-signed ad-hoc, so first launch may require System Settings ->
+  Privacy & Security -> Open Anyway.
+- Browser auto-updaters usually update the original app only. Re-run
+  `browserfi build --force` after updating the source browser.
+- Firefox support uses `-profile <dir> -no-remote`; Chromium-family browsers use
+  `--user-data-dir=<dir>`.

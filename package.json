@@ -1,0 +1,50 @@
+{
+  "name": "browserfi",
+  "version": "0.1.0",
+  "description": "Per-context browser app bundles for macOS.",
+  "type": "module",
+  "bin": {
+    "browserfi": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "browserfi.example.toml",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc && chmod +x dist/cli.js",
+    "check": "tsc --noEmit",
+    "prepack": "npm run build",
+    "pack:dry": "npm pack --dry-run"
+  },
+  "keywords": [
+    "browser",
+    "chromium",
+    "macos",
+    "aerospace",
+    "profiles"
+  ],
+  "author": "Adrian Lynch",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/adrianlynch/browserfi.git"
+  },
+  "bugs": {
+    "url": "https://github.com/adrianlynch/browserfi/issues"
+  },
+  "homepage": "https://github.com/adrianlynch/browserfi#readme",
+  "os": [
+    "darwin"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0"
+  },
+  "dependencies": {
+    "smol-toml": "^1.6.1"
+  }
+}
