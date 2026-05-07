@@ -188,14 +188,14 @@ function Table({ bundles, selected, showWorkspace, bundleNeedsBuild }: { bundles
   return (
     <Box flexDirection="column">
       <Text color="gray">{tableBorder("top", widths)}</Text>
-      <Text color="gray">{tableRow(showWorkspace ? ["Status", "Name", "Key", "Browser", "Workspace"] : ["Status", "Name", "Key", "Browser"], widths)}</Text>
+      <Text color="gray">{tableRow(showWorkspace ? ["Status", "Name", "Browser", "Workspace"] : ["Status", "Name", "Browser"], widths)}</Text>
       <Text color="gray">{tableBorder("middle", widths)}</Text>
       {bundles.map((bundle, index) => {
         const active = index === selected;
         const status = bundleNeedsBuild(bundle) ? "build" : "ok";
         return (
           <Text key={bundle.key} inverse={active} color={status === "build" ? "yellow" : undefined}>
-            {tableRow(showWorkspace ? [status, bundle.displayName, bundle.key, bundle.browser, bundle.workspace ?? ""] : [status, bundle.displayName, bundle.key, bundle.browser], widths)}
+            {tableRow(showWorkspace ? [status, bundle.displayName, bundle.browser, bundle.workspace ?? ""] : [status, bundle.displayName, bundle.browser], widths)}
           </Text>
         );
       })}
@@ -311,10 +311,10 @@ function tableBorder(position: "top" | "middle" | "bottom", widths: number[]): s
 
 function tableWidths(columns: number, showWorkspace: boolean): number[] {
   const usableColumns = Math.max(40, columns - 2);
-  const base = showWorkspace ? [6, 16, 18, 8, 12] : [6, 22, 26, 8];
+  const base = showWorkspace ? [6, 28, 8, 18] : [6, 40, 8];
   const tableOverhead = 3 * base.length + 1;
   let remaining = Math.max(0, usableColumns - tableOverhead - sum(base));
-  const flexible = showWorkspace ? [1, 2, 4] : [1, 2];
+  const flexible = showWorkspace ? [1, 3] : [1];
   while (remaining > 0) {
     for (const index of flexible) {
       if (remaining === 0) break;
