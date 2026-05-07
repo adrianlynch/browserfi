@@ -40,10 +40,10 @@ per-launch profile directory flag.
 
 ## Install
 
-From npm, once published:
+From npm:
 
 ```bash
-npm install -g browserfi
+npm install -g @adrianlynch/browserfi
 ```
 
 From source:
