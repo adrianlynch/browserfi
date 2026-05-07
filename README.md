@@ -165,14 +165,22 @@ workspace = "6_User_Console"
 Each bundle supports:
 
 - `browser`: one of the supported adapters; defaults to `chromium`
-- `key`: stable identifier used in app names, bundle ids, profiles, and icons
-- `displayName`: Dock and menu bar name
+- `key`: stable identifier used for profiles and icons
+- `id`: optional stable app identity; defaults to `key`
+- `displayName`: Finder, Dock, and menu bar name; also used for the `.app` filename
 - `workspace`: optional AeroSpace workspace for printed rules
 - `sourceApp`: optional override for the source `.app`
 - `installDir`, `profilesDir`, `iconsDir`: optional per-bundle path overrides
-- `bundleIdPrefix`, `appNamePrefix`, `executableName`: advanced overrides
+- `bundleIdPrefix`, `executableName`: advanced overrides
 
-Keys may contain only letters, numbers, dots, underscores, and hyphens.
+Keys and ids may contain only letters, numbers, dots, underscores, and hyphens.
+Display names must not be empty or contain `/`.
+
+Generated apps are written as `<displayName>.app`. Browserfi marks generated
+bundles in `Info.plist` with ownership metadata. If a target app name already
+exists, Browserfi only overwrites it when it is managed by the same config and
+same bundle id. Apps from other Browserfi configs, or third-party apps such as
+Google Chrome, are rejected until the existing app is deleted manually.
 
 ## Custom Icons
 
@@ -202,7 +210,7 @@ Each generated bundle is detectable by app id:
 
 ```toml
 [[on-window-detected]]
-if.app-id = "com.adrian.chromium-<key>"
+if.app-id = "com.adrian.chromium-<id>"
 run = "move-node-to-workspace <workspace>"
 ```
 

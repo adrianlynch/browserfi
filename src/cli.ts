@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, cpSync, renameSync, writeFileSync, chmodSync, utimesSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, cpSync, renameSync, writeFileSync, chmodSync, utimesSync } from "node:fs";
 import { tmpdir, homedir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,6 +10,7 @@ import { runTui } from "./tui.js";
 export type BrowserName = "chromium" | "chrome" | "chrome-canary" | "brave" | "edge" | "firefox";
 
 export type BundleConfig = {
+  id?: string;
   browser?: BrowserName;
   key: string;
   displayName?: string;
@@ -45,6 +46,8 @@ export type BrowserDefinition = {
 };
 
 export type ResolvedBundle = {
+  id: string;
+  configPath: string;
   browser: BrowserName;
   key: string;
   displayName: string;
@@ -67,6 +70,10 @@ const KEY_PATTERN = /^[A-Za-z0-9._-]+$/;
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const AEROSPACE_BEGIN = "# BEGIN browserfi";
 const AEROSPACE_END = "# END browserfi";
+const BROWSERFI_MANAGED = "BrowserfiManaged";
+const BROWSERFI_ID = "BrowserfiId";
+const BROWSERFI_KEY = "BrowserfiKey";
+const BROWSERFI_CONFIG_PATH = "BrowserfiConfigPath";
 
 export const BROWSERS: Record<BrowserName, BrowserDefinition> = {
   chromium: {
@@ -272,7 +279,7 @@ function parseAerospaceArgs(args: string[]): { configPath?: string; aerospaceCon
 function build(options: { configPath?: string; force: boolean }): void {
   requireMacos();
   const loaded = loadConfig(options.configPath);
-  const bundles = resolveBundles(loaded.config, loaded.baseDir);
+  const bundles = resolveBundles(loaded.config, loaded.baseDir, loaded.path);
   const aerospaceSnippets: Array<{ bundleId: string; workspace: string }> = [];
   let iconsChanged = false;
 
@@ -314,7 +321,7 @@ function build(options: { configPath?: string; force: boolean }): void {
 
 function list(options: { configPath?: string; format: ListFormat }): void {
   const loaded = loadConfig(options.configPath);
-  const bundles = resolveBundles(loaded.config, loaded.baseDir);
+  const bundles = resolveBundles(loaded.config, loaded.baseDir, loaded.path);
 
   if (options.format === "json") {
     console.log(JSON.stringify(bundles.map(toListItem), null, 2));
@@ -329,7 +336,7 @@ function list(options: { configPath?: string; format: ListFormat }): void {
 
 function aerospace(options: { configPath?: string; aerospaceConfigPath?: string; write: boolean; reload: boolean }): void {
   const loaded = loadConfig(options.configPath);
-  const bundles = resolveBundles(loaded.config, loaded.baseDir);
+  const bundles = resolveBundles(loaded.config, loaded.baseDir, loaded.path);
   const rules = aerospaceRules(bundles);
 
   if (!options.write) {
@@ -350,6 +357,7 @@ function aerospace(options: { configPath?: string; aerospaceConfigPath?: string;
 
 function toListItem(bundle: ResolvedBundle): Record<string, string | undefined> {
   return {
+    id: bundle.id,
     key: bundle.key,
     browser: bundle.browser,
     displayName: bundle.displayName,
@@ -374,6 +382,7 @@ function printTable(bundles: ResolvedBundle[]): void {
 
 function printWideTable(bundles: ResolvedBundle[]): void {
   const rows = bundles.map((bundle) => [
+    bundle.id,
     bundle.key,
     bundle.browser,
     bundle.displayName,
@@ -382,7 +391,7 @@ function printWideTable(bundles: ResolvedBundle[]): void {
     bundle.appPath,
     bundle.profileDir,
   ]);
-  const headers = ["Key", "Browser", "Name", "Workspace", "Bundle ID", "App Path", "Profile Path"];
+  const headers = ["ID", "Key", "Browser", "Name", "Workspace", "Bundle ID", "App Path", "Profile Path"];
   printRows(headers, rows);
 }
 
@@ -465,11 +474,11 @@ function configCandidates(): string[] {
   ];
 }
 
-export function resolveBundles(config: Config, baseDir: string): ResolvedBundle[] {
-  return config.bundles.map((entry) => resolveBundle(config, entry, baseDir));
+export function resolveBundles(config: Config, baseDir: string, configPath = ""): ResolvedBundle[] {
+  return config.bundles.map((entry) => resolveBundle(config, entry, baseDir, configPath));
 }
 
-function resolveBundle(config: Config, entry: BundleConfig, baseDir: string): ResolvedBundle {
+function resolveBundle(config: Config, entry: BundleConfig, baseDir: string, configPath: string): ResolvedBundle {
   const browserName = entry.browser ?? "chromium";
   const browser = BROWSERS[browserName];
   if (!browser) {
@@ -478,16 +487,19 @@ function resolveBundle(config: Config, entry: BundleConfig, baseDir: string): Re
   if (!entry.key || !KEY_PATTERN.test(entry.key)) {
     throw new Error(`invalid bundle key "${entry.key}". Use only letters, numbers, dots, underscores, and hyphens.`);
   }
+  const id = entry.id ?? entry.key;
+  if (!KEY_PATTERN.test(id)) {
+    throw new Error(`invalid bundle id "${id}". Use only letters, numbers, dots, underscores, and hyphens.`);
+  }
 
   const installDir = resolvePath(entry.installDir ?? config.installDir ?? "/Applications", baseDir);
   const profilesDir = resolvePath(entry.profilesDir ?? config.profilesDir ?? "~/BrowserProfiles", baseDir);
   const iconsDir = resolvePath(entry.iconsDir ?? config.iconsDir ?? "./icons", baseDir);
   const sourceApp = resolvePath(entry.sourceApp ?? browser.sourceApp, baseDir);
   const bundleIdPrefix = entry.bundleIdPrefix ?? browser.bundleIdPrefix;
-  const appNamePrefix = entry.appNamePrefix ?? browser.appNamePrefix;
   const executableName = entry.executableName ?? browser.executableName;
   const displayName = entry.displayName ?? `${titleCase(browserName)} ${entry.key}`;
-  const appName = `${appNamePrefix}-${entry.key}`;
+  const appName = appNameFromDisplayName(displayName);
   const profileDir = join(profilesDir, entry.key);
 
   if (!existsSync(sourceApp)) {
@@ -495,6 +507,8 @@ function resolveBundle(config: Config, entry: BundleConfig, baseDir: string): Re
   }
 
   return {
+    id,
+    configPath,
     browser: browserName,
     key: entry.key,
     displayName,
@@ -502,7 +516,7 @@ function resolveBundle(config: Config, entry: BundleConfig, baseDir: string): Re
     sourceApp,
     appName,
     appPath: join(installDir, `${appName}.app`),
-    bundleId: `${bundleIdPrefix}-${entry.key}`,
+    bundleId: `${bundleIdPrefix}-${id}`,
     profileDir,
     executableName,
     profileArgs: browser.profileArgs(profileDir),
@@ -516,6 +530,10 @@ function configureBundle(bundle: ResolvedBundle, options: BundleOperationOptions
   plistSetString(plist, "CFBundleIdentifier", bundle.bundleId);
   plistSetString(plist, "CFBundleName", bundle.displayName);
   plistSetString(plist, "CFBundleDisplayName", bundle.displayName);
+  plistSetString(plist, BROWSERFI_MANAGED, "true");
+  plistSetString(plist, BROWSERFI_ID, bundle.id);
+  plistSetString(plist, BROWSERFI_KEY, bundle.key);
+  plistSetString(plist, BROWSERFI_CONFIG_PATH, bundle.configPath);
   plistBuddy(["Delete", ":CFBundleIconName"], plist, { ignoreFailure: true });
 
   const executableDir = join(bundle.appPath, "Contents/MacOS");
@@ -530,8 +548,10 @@ function configureBundle(bundle: ResolvedBundle, options: BundleOperationOptions
 
 export function createOrUpdateBundle(bundle: ResolvedBundle, force: boolean, options: BundleOperationOptions = {}): boolean {
   let changed = false;
+  assertCanUseAppPath(bundle);
+  removePreviousManagedApps(bundle, options);
 
-  if (existsSync(bundle.appPath) && force) {
+  if (existsSync(bundle.appPath) && (force || bundleNeedsBuild(bundle))) {
     log(options, "    removing existing bundle");
     rmSync(bundle.appPath, { recursive: true, force: true });
   }
@@ -552,6 +572,9 @@ export function bundleNeedsBuild(bundle: ResolvedBundle): boolean {
   if (!existsSync(bundle.appPath)) return true;
 
   const plist = join(bundle.appPath, "Contents/Info.plist");
+  if (plistReadString(plist, BROWSERFI_MANAGED) !== "true") return true;
+  if (plistReadString(plist, BROWSERFI_ID) !== bundle.id) return true;
+  if (plistReadString(plist, BROWSERFI_CONFIG_PATH) !== bundle.configPath) return true;
   if (plistReadString(plist, "CFBundleIdentifier") !== bundle.bundleId) return true;
   if (plistReadString(plist, "CFBundleName") !== bundle.displayName) return true;
   if (plistReadString(plist, "CFBundleDisplayName") !== bundle.displayName) return true;
@@ -567,15 +590,39 @@ export function bundleNeedsBuild(bundle: ResolvedBundle): boolean {
   }
 }
 
+function assertCanUseAppPath(bundle: ResolvedBundle): void {
+  if (!existsSync(bundle.appPath)) return;
+  const owner = readBrowserfiOwner(bundle.appPath);
+  if (!owner) {
+    throw new Error(`App already exists and is not managed by Browserfi: ${bundle.appPath}`);
+  }
+  if (owner.configPath !== bundle.configPath || owner.id !== bundle.id) {
+    throw new Error(`Browserfi app already exists, delete the existing app first: ${bundle.appPath}`);
+  }
+}
+
+function removePreviousManagedApps(bundle: ResolvedBundle, options: BundleOperationOptions): void {
+  for (const appPath of findManagedApps(bundle)) {
+    if (appPath === bundle.appPath) continue;
+    log(options, `    removing previous bundle ${appPath}`);
+    rmSync(appPath, { recursive: true, force: true });
+  }
+}
+
 function copyAppBundle(sourceApp: string, appPath: string): void {
   run("/bin/cp", ["-R", sourceApp, appPath]);
 }
 
 export function removeBundle(bundle: ResolvedBundle, deleteProfile: boolean, options: BundleOperationOptions = {}): void {
-  if (existsSync(bundle.appPath)) {
-    rmSync(bundle.appPath, { recursive: true, force: true });
-    log(options, `removed ${bundle.appPath}`);
-  } else {
+  const appPaths = new Set([bundle.appPath, ...findManagedApps(bundle)]);
+  let removedApp = false;
+  for (const appPath of appPaths) {
+    if (!existsSync(appPath)) continue;
+    rmSync(appPath, { recursive: true, force: true });
+    log(options, `removed ${appPath}`);
+    removedApp = true;
+  }
+  if (!removedApp) {
     log(options, `app not found at ${bundle.appPath}`);
   }
 
@@ -591,6 +638,32 @@ export function removeBundle(bundle: ResolvedBundle, deleteProfile: boolean, opt
 
 function log(options: BundleOperationOptions, message: string): void {
   if (!options.quiet) console.log(message);
+}
+
+type BrowserfiOwner = {
+  id?: string;
+  configPath?: string;
+};
+
+function readBrowserfiOwner(appPath: string): BrowserfiOwner | undefined {
+  const plist = join(appPath, "Contents/Info.plist");
+  if (plistReadString(plist, BROWSERFI_MANAGED) !== "true") return undefined;
+  return {
+    id: plistReadString(plist, BROWSERFI_ID),
+    configPath: plistReadString(plist, BROWSERFI_CONFIG_PATH),
+  };
+}
+
+function findManagedApps(bundle: ResolvedBundle): string[] {
+  const installDir = dirname(bundle.appPath);
+  if (!existsSync(installDir)) return [];
+  return readdirSync(installDir)
+    .filter((name) => name.endsWith(".app"))
+    .map((name) => join(installDir, name))
+    .filter((appPath) => {
+      const owner = readBrowserfiOwner(appPath);
+      return owner?.id === bundle.id && owner.configPath === bundle.configPath;
+    });
 }
 
 function wrapperScript(bundle: ResolvedBundle): string {
@@ -794,6 +867,17 @@ function titleCase(value: string): string {
     .filter(Boolean)
     .map((part) => `${part[0]?.toUpperCase() ?? ""}${part.slice(1)}`)
     .join(" ");
+}
+
+function appNameFromDisplayName(displayName: string): string {
+  const appName = displayName.trim();
+  if (!appName) {
+    throw new Error("displayName must not be empty");
+  }
+  if (appName.includes("/")) {
+    throw new Error("displayName must not contain /");
+  }
+  return appName.endsWith(".app") ? appName.slice(0, -4) : appName;
 }
 
 function touch(path: string): void {

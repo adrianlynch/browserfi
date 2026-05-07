@@ -13,7 +13,7 @@ const keyPattern = /^[A-Za-z0-9._-]+$/;
 type TuiOptions = {
   configPath?: string;
   loadConfig: (configPath?: string) => LoadedConfig;
-  resolveBundles: (config: Config, baseDir: string) => ResolvedBundle[];
+  resolveBundles: (config: Config, baseDir: string, configPath?: string) => ResolvedBundle[];
   bundleNeedsBuild: (bundle: ResolvedBundle) => boolean;
   createOrUpdateBundle: (bundle: ResolvedBundle, force: boolean, options?: { quiet?: boolean }) => boolean;
   removeBundle: (bundle: ResolvedBundle, deleteProfile: boolean, options?: { quiet?: boolean }) => void;
@@ -71,7 +71,7 @@ function BrowserfiTui({ options, onDone, onError }: { options: TuiOptions; onDon
   const [message, setMessage] = useState("");
   const [aerospaceInfo] = useState(loadAerospaceInfo);
 
-  const bundles = useMemo(() => options.resolveBundles(loaded.config, loaded.baseDir), [loaded, options]);
+  const bundles = useMemo(() => options.resolveBundles(loaded.config, loaded.baseDir, loaded.path), [loaded, options]);
   const selectedBundle = bundles[Math.min(selected, Math.max(0, bundles.length - 1))];
   const fields = editFields(aerospaceInfo);
   const browserOptions = installedBrowsers(loaded.config.bundles);
@@ -387,8 +387,10 @@ function saveEdit(options: TuiOptions, loaded: LoadedConfig, originalKey: string
   if (originalKey) {
     const index = loaded.config.bundles.findIndex((bundle) => bundle.key === originalKey);
     if (index === -1) throw new Error(`bundle not found: ${originalKey}`);
+    next.id = loaded.config.bundles[index].id ?? originalKey;
     loaded.config.bundles[index] = { ...loaded.config.bundles[index], ...next };
   } else {
+    next.id = values.key;
     loaded.config.bundles.push(next);
   }
 
