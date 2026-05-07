@@ -90,10 +90,8 @@ detail panel for the selected bundle. Use arrow keys to select a row, then:
 
 - `enter`/`e`: edit config values inline
 - `a`: add new app
-- `b`: build/update selected app
-- `f`: force rebuild selected app
+- `b`: build selected app
 - `d`: delete app
-- `B`: build all
 - `w`: write AeroSpace rules
 - `q`: quit
 

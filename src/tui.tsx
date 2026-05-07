@@ -127,19 +127,11 @@ function BrowserfiTui({ options, onDone, onError }: { options: TuiOptions; onDon
       } else if (input === "a") {
         setMode({ type: "edit", values: newAppValues(loaded.config, aerospaceInfo, browserOptions), field: 0, fields, browserOptions, workspaceOptions: aerospaceInfo.workspaces });
       } else if (input === "b" && selectedBundle) {
-        options.createOrUpdateBundle(selectedBundle, false);
-        setMessage(`built ${selectedBundle.key}`);
-        reload();
-      } else if (input === "f" && selectedBundle) {
         options.createOrUpdateBundle(selectedBundle, true);
-        setMessage(`rebuilt ${selectedBundle.key}`);
+        setMessage(`built ${selectedBundle.key}`);
         reload();
       } else if (input === "d" && selectedBundle) {
         setMode(confirmDeleteApp(options, loaded, selectedBundle));
-      } else if (input === "B") {
-        for (const bundle of bundles) options.createOrUpdateBundle(bundle, false);
-        setMessage("built all bundles");
-        reload();
       } else if (input === "w" && aerospaceInfo.configPath) {
         options.aerospace({ configPath: loaded.path, write: true, reload: false });
         setMessage("updated AeroSpace config");
@@ -280,8 +272,8 @@ function Footer({ mode, hasAerospace }: { mode: Mode["type"]; hasAerospace?: boo
       <Text color="gray">{rule}</Text>
       <Text color="gray">
         {hasAerospace
-          ? "↑/↓ select • a add app • enter/e edit • b build • f rebuild • d delete app • B build all • w aerospace • q quit"
-          : "↑/↓ select • a add app • enter/e edit • b build • f rebuild • d delete app • B build all • q quit"}
+          ? "↑/↓ select • a add app • enter/e edit • b build • d delete app • w aerospace • q quit"
+          : "↑/↓ select • a add app • enter/e edit • b build • d delete app • q quit"}
       </Text>
     </Box>
   );
