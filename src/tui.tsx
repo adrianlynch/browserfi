@@ -258,14 +258,12 @@ function Table({ bundles, selected, showWorkspace, bundleNeedsBuild }: { bundles
   return (
     <Box flexDirection="column">
       <Text color="gray">{tableBorder("top", widths)}</Text>
-      <Text color="gray">{tableRow(showWorkspace ? ["Status", "Name", "Browser", "Workspace"] : ["Status", "Name", "Browser"], widths)}</Text>
+      <Text color="gray">{tableRow(showWorkspace ? ["Status", "  Name", "Browser", "Workspace"] : ["Status", "  Name", "Browser"], widths)}</Text>
       {bundles.map((bundle, index) => {
         const active = index === selected;
         const status = bundleNeedsBuild(bundle) ? "build" : "ok";
         return (
-          <Text key={bundle.key} inverse={active} color={status === "build" ? "yellow" : undefined}>
-            {tableRow(showWorkspace ? [status, bundle.displayName, bundle.browser, bundle.workspace ?? ""] : [status, bundle.displayName, bundle.browser], widths)}
-          </Text>
+          <TableBundleRow key={bundle.key} bundle={bundle} active={active} status={status} showWorkspace={showWorkspace} widths={widths} />
         );
       })}
       <Text color="gray">{tableBorder("bottom", widths)}</Text>
@@ -282,6 +280,22 @@ function Table({ bundles, selected, showWorkspace, bundleNeedsBuild }: { bundles
         </Box>
       )}
     </Box>
+  );
+}
+
+function TableBundleRow({ bundle, active, status, showWorkspace, widths }: { bundle: ResolvedBundle; active: boolean; status: "ok" | "build"; showWorkspace: boolean; widths: number[] }) {
+  const statusLabel = status === "ok" ? "✓ ok" : "build";
+  return (
+    <Text inverse={active}>
+      <Text color="gray">│ </Text>
+      <Text color={status === "ok" ? "green" : "yellow"}>{fit(statusLabel, widths[0]).padEnd(widths[0])}</Text>
+      <Text>  </Text>
+      <Text color={bundle.iconBackgroundColor}>{bundle.iconBackgroundColor ? "●" : " "}</Text>
+      <Text> {fit(bundle.displayName, widths[1] - 2).padEnd(widths[1] - 2)}</Text>
+      <Text>  {fit(bundle.browser, widths[2]).padEnd(widths[2])}</Text>
+      {showWorkspace && <Text>  {fit(bundle.workspace ?? "", widths[3]).padEnd(widths[3])}</Text>}
+      <Text color="gray"> │</Text>
+    </Text>
   );
 }
 
