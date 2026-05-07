@@ -9,6 +9,7 @@ import type { BuildProgress, BundleConfig, Config, LoadedConfig, ResolvedBundle 
 
 const browserNames = ["chromium", "chrome", "chrome-canary", "brave", "edge", "firefox"];
 const spinnerFrames = ["*", "+", "-", "+"];
+const iconColors = ["", "#34CDD7", "#FFB000", "#FF5C8A", "#7C5CFF", "#2ECC71", "#FFFFFF", "#111111"];
 
 type TuiOptions = {
   configPath?: string;
@@ -38,7 +39,7 @@ type Mode =
       fields: EditField[];
       browserOptions: string[];
       workspaceOptions: string[];
-      picker?: "browser" | "workspace";
+      picker?: "browser" | "workspace" | "iconColor";
     }
   | { type: "confirm"; message: string; run: () => string };
 
@@ -47,6 +48,7 @@ type EditValues = {
   key: string;
   displayName: string;
   icon: string;
+  iconColor: string;
   workspace: string;
 };
 
@@ -56,6 +58,7 @@ const baseFields: EditField[] = [
   { key: "browser", label: "Browser" },
   { key: "displayName", label: "Display name" },
   { key: "icon", label: "Icon" },
+  { key: "iconColor", label: "Icon color" },
 ];
 
 export function runTui(options: TuiOptions): Promise<void> {
@@ -122,6 +125,9 @@ function BrowserfiTui({ options, onDone, onError }: { options: TuiOptions; onDon
         } else if (mode.picker === "workspace" && (key.upArrow || key.downArrow || input === "j" || input === "k")) {
           const direction = key.upArrow || input === "k" ? -1 : 1;
           setMode({ ...mode, values: { ...mode.values, workspace: nextOption(aerospaceInfo.workspaces, mode.values.workspace, direction) } });
+        } else if (mode.picker === "iconColor" && (key.upArrow || key.downArrow || input === "j" || input === "k")) {
+          const direction = key.upArrow || input === "k" ? -1 : 1;
+          setMode({ ...mode, values: { ...mode.values, iconColor: nextOption(iconColors, mode.values.iconColor, direction) } });
         } else if (mode.picker && key.return) {
           setMode({ ...mode, picker: undefined });
         } else if (key.upArrow || input === "k") {
@@ -132,6 +138,8 @@ function BrowserfiTui({ options, onDone, onError }: { options: TuiOptions; onDon
           setMode({ ...mode, picker: "browser" });
         } else if (key.return && mode.fields[mode.field]?.key === "workspace") {
           setMode({ ...mode, picker: "workspace" });
+        } else if (key.return && mode.fields[mode.field]?.key === "iconColor") {
+          setMode({ ...mode, picker: "iconColor" });
         } else if (input === "s") {
           saveEdit(options, loaded, mode.originalKey, mode.values, mode.workspaceOptions);
           setMessage(`updated ${loaded.path}`);
@@ -241,6 +249,7 @@ function Table({ bundles, selected, showWorkspace, bundleNeedsBuild }: { bundles
           <Text color="gray">Name: {selectedBundle.displayName}</Text>
           <Text color="gray">App: {selectedBundle.appName}</Text>
           <Text color="gray">Icon: {selectedBundle.icon ?? "icons/<key>.png|icns"}</Text>
+          <Text color="gray">Icon color: {selectedBundle.iconColor ?? "-"}</Text>
           {showWorkspace && <Text color="gray">Workspace: {selectedBundle.workspace ?? "-"}</Text>}
           <Text color="gray">Profile: {selectedBundle.profileDir}</Text>
         </Box>
@@ -259,7 +268,7 @@ function EditForm({ mode, setMode }: { mode: Extract<Mode, { type: "edit" }>; se
           <Box width={22}>
             <Text color={index === mode.field ? "cyan" : undefined}>{item.label}</Text>
           </Box>
-          {index === mode.field && item.key !== "workspace" && item.key !== "browser" ? (
+          {index === mode.field && item.key !== "workspace" && item.key !== "browser" && item.key !== "iconColor" ? (
             <TextInput
               value={mode.values[item.key]}
               onChange={(value) => setMode({ ...mode, values: { ...mode.values, [field.key]: value } })}
@@ -268,6 +277,8 @@ function EditForm({ mode, setMode }: { mode: Extract<Mode, { type: "edit" }>; se
             <Text color="cyan">{mode.values.browser || "-"} {mode.picker === "browser" ? "" : "(enter to choose)"}</Text>
           ) : index === mode.field && item.key === "workspace" ? (
             <Text color="cyan">{mode.values.workspace || "-"} {mode.picker === "workspace" ? "" : "(enter to choose)"}</Text>
+          ) : index === mode.field && item.key === "iconColor" ? (
+            <Text color="cyan">{mode.values.iconColor || "default"} {mode.picker === "iconColor" ? "" : "(enter to choose)"}</Text>
           ) : (
             <Text>{mode.values[item.key] || "-"}</Text>
           )}
@@ -293,6 +304,16 @@ function EditForm({ mode, setMode }: { mode: Extract<Mode, { type: "edit" }>; se
           ))}
         </Box>
       )}
+      {mode.picker === "iconColor" && (
+        <Box flexDirection="column" marginTop={1}>
+          {iconColors.map((color) => (
+            <Text key={color || "default"} color={color || "gray"}>
+              {color === mode.values.iconColor ? "› " : "  "}
+              {color || "default"}
+            </Text>
+          ))}
+        </Box>
+      )}
     </Box>
   );
 }
@@ -306,7 +327,7 @@ function Footer({ mode, hasAerospace, needsSave, needsBuild, buildProgress, spin
         {needsSave ? <Text bold color="green">Unsaved changes (s) to save</Text> : <Text> </Text>}
         <Text color="gray">{rule}</Text>
         <Text color="gray">
-          {hasAerospace ? "↑/↓ move fields • enter choose browser/workspace • " : "↑/↓ move fields • enter choose browser • "}
+          {hasAerospace ? "↑/↓ move fields • enter choose options • " : "↑/↓ move fields • enter choose browser/color • "}
           <Text bold={needsSave} color={needsSave ? "green" : "gray"}>s save</Text>
           {" • esc cancel"}
         </Text>
@@ -404,6 +425,7 @@ function editValues(bundle: ResolvedBundle, aerospaceInfo: AerospaceInfo): EditV
     key: bundle.key,
     displayName: bundle.displayName,
     icon: bundle.icon ?? "",
+    iconColor: bundle.iconColor ?? "",
     workspace: bundle.workspace ?? aerospaceInfo.workspaces[0] ?? "",
   };
 }
@@ -414,6 +436,7 @@ function newAppValues(aerospaceInfo: AerospaceInfo, browserOptions: string[]): E
     key: "",
     displayName: "New App",
     icon: "",
+    iconColor: "",
     workspace: aerospaceInfo.workspaces[0] ?? "",
   };
 }
@@ -432,6 +455,7 @@ function saveEdit(options: TuiOptions, loaded: LoadedConfig, originalKey: string
     key,
     displayName,
     icon: values.icon.trim() || undefined,
+    iconColor: values.iconColor || undefined,
     workspace: values.workspace || undefined,
   };
 

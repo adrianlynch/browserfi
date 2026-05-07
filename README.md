@@ -103,7 +103,8 @@ machine. In the edit form, use `↑/↓` to move between fields and `enter` to o
 browser/workspace selectors. Press `s` to save. New apps get a filesystem-safe
 `key` generated from the display name; existing apps keep their current key when
 renamed. The icon field accepts a `.svg`, `.png`, or `.icns` path or URL; leave
-it blank to use the `icons/<key>.png|icns` convention. If AeroSpace config is
+it blank to use the `icons/<key>.png|icns` convention. The icon color picker
+sets `iconColor`, which tints SVG icons during build. If AeroSpace config is
 found, Browserfi shows workspace fields and lets you choose from existing
 AeroSpace workspace names. If AeroSpace is not found, workspace fields and
 AeroSpace actions are hidden.
@@ -172,6 +173,7 @@ Each bundle supports:
 - `id`: optional stable app identity; defaults to `key`
 - `displayName`: Finder, Dock, and menu bar name; also used for the `.app` filename
 - `icon`: optional `.svg`, `.png`, or `.icns` path or URL for this app
+- `iconColor`: optional SVG tint color, as a 6-digit hex value like `#34CDD7`
 - `workspace`: optional AeroSpace workspace for printed rules
 - `sourceApp`: optional override for the source `.app`
 - `installDir`, `profilesDir`, `iconsDir`: optional per-bundle path overrides
@@ -205,6 +207,7 @@ browser = "chromium"
 key = "docs"
 displayName = "Docs"
 icon = "https://example.com/icon.svg"
+iconColor = "#34CDD7"
 ```
 
 If `icon` is not set, Browserfi looks for a square PNG, ideally `1024x1024`,
