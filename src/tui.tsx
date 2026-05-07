@@ -11,7 +11,7 @@ const browserNames = ["chromium", "chrome", "chrome-canary", "brave", "edge", "f
 const spinnerFrames = ["*", "+", "-", "+"];
 const iconColors = ["", "#34CDD7", "#FFB000", "#FF5C8A", "#7C5CFF", "#2ECC71", "#FFFFFF", "#111111"];
 const REDRAW_INTERVAL_MS = 2000;
-const SELECTED_ROW_BACKGROUND = "#FFD6E7";
+const SELECTED_ROW_BACKGROUND = "#FFEAF3";
 
 type TuiOptions = {
   configPath?: string;
