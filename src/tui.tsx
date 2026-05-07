@@ -15,7 +15,8 @@ const SELECTED_ROW_BACKGROUND_LIGHT = "#FFEAF3";
 const SELECTED_ROW_BACKGROUND_DARK = "#5A2438";
 const IS_DARK_TERMINAL = isDarkTerminal();
 const SELECTED_ROW_BACKGROUND = IS_DARK_TERMINAL ? SELECTED_ROW_BACKGROUND_DARK : SELECTED_ROW_BACKGROUND_LIGHT;
-const DETAIL_LABEL_COLOR = IS_DARK_TERMINAL ? "#D0D0D0" : "#777777";
+const DETAIL_LABEL_COLOR = IS_DARK_TERMINAL ? "#F2F2F2" : "#000000";
+const DETAIL_VALUE_COLOR = IS_DARK_TERMINAL ? "#B8B8B8" : "#555555";
 
 type TuiOptions = {
   configPath?: string;
@@ -302,7 +303,7 @@ function DetailLine({ label, value }: { label: string; value: string }) {
     <Text>
       <Text color={DETAIL_LABEL_COLOR}>{label}:</Text>
       {" "}
-      <Text>{value}</Text>
+      <Text color={DETAIL_VALUE_COLOR}>{value}</Text>
     </Text>
   );
 }
