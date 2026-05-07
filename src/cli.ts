@@ -62,8 +62,14 @@ export type ResolvedBundle = {
   iconsDir: string;
 };
 
+export type BuildProgress = {
+  step: string;
+  current: number;
+  total: number;
+};
+
 type ListFormat = "table" | "wide" | "json" | "paths";
-type BundleOperationOptions = { quiet?: boolean };
+type BundleOperationOptions = { quiet?: boolean; onProgress?: (progress: BuildProgress) => void };
 
 const DEFAULT_CONFIG = ".browserfi.toml";
 const KEY_PATTERN = /^[A-Za-z0-9._-]+$/;
@@ -135,6 +141,7 @@ function main(): void {
         loadConfig,
         resolveBundles,
         bundleNeedsBuild,
+        buildBundle,
         createOrUpdateBundle,
         removeBundle,
         writeConfig,
@@ -162,6 +169,7 @@ function main(): void {
           loadConfig,
           resolveBundles,
           bundleNeedsBuild,
+          buildBundle,
           createOrUpdateBundle,
           removeBundle,
           writeConfig,
@@ -566,6 +574,64 @@ export function createOrUpdateBundle(bundle: ResolvedBundle, force: boolean, opt
   }
 
   return changed;
+}
+
+export async function buildBundle(bundle: ResolvedBundle, force: boolean, options: BundleOperationOptions = {}): Promise<boolean> {
+  const total = 7;
+  let changed = false;
+
+  await reportProgress(options, "Preparing", 1, total);
+  assertCanUseAppPath(bundle);
+  removePreviousManagedApps(bundle, options);
+
+  if (existsSync(bundle.appPath) && (force || bundleNeedsBuild(bundle))) {
+    log(options, "    removing existing bundle");
+    rmSync(bundle.appPath, { recursive: true, force: true });
+  }
+
+  await reportProgress(options, "Copying app", 2, total);
+  if (!existsSync(bundle.appPath)) {
+    log(options, `    copying ${bundle.sourceApp} -> ${bundle.appPath}`);
+    copyAppBundle(bundle.sourceApp, bundle.appPath);
+    changed = true;
+  } else {
+    log(options, "    bundle exists (use --force to rebuild)");
+  }
+
+  await reportProgress(options, "Configuring bundle", 3, total);
+  if (changed || bundleNeedsBuild(bundle)) {
+    configureBundle(bundle, options);
+    changed = true;
+  }
+
+  await reportProgress(options, "Applying icon", 4, total);
+  if (applyIcon(bundle)) {
+    log(options, `    applied icon from ${relativePath(join(bundle.iconsDir, `${bundle.key}.*`))}`);
+    changed = true;
+  }
+
+  await reportProgress(options, "Updating attributes", 5, total);
+  if (changed) {
+    run("xattr", ["-cr", bundle.appPath]);
+  }
+
+  await reportProgress(options, "Signing", 6, total);
+  if (changed) {
+    run("codesign", ["--force", "--deep", "--sign", "-", bundle.appPath]);
+    touch(bundle.appPath);
+    refreshLaunchServices(bundle.appPath);
+  }
+
+  await reportProgress(options, "Creating profile", 7, total);
+  mkdirSync(bundle.profileDir, { recursive: true });
+  log(options, `    profile at ${bundle.profileDir}`);
+
+  return changed;
+}
+
+async function reportProgress(options: BundleOperationOptions, step: string, current: number, total: number): Promise<void> {
+  options.onProgress?.({ step, current, total });
+  await new Promise((resolve) => setTimeout(resolve, 0));
 }
 
 export function bundleNeedsBuild(bundle: ResolvedBundle): boolean {

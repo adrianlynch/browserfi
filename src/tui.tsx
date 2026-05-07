@@ -5,7 +5,7 @@ import React, { useMemo, useState } from "react";
 import { Box, Text, render, useApp, useInput, useStdout } from "ink";
 import TextInput from "ink-text-input";
 import { parse as parseToml } from "smol-toml";
-import type { BundleConfig, Config, LoadedConfig, ResolvedBundle } from "./cli.js";
+import type { BuildProgress, BundleConfig, Config, LoadedConfig, ResolvedBundle } from "./cli.js";
 
 const browserNames = ["chromium", "chrome", "chrome-canary", "brave", "edge", "firefox"];
 
@@ -14,6 +14,7 @@ type TuiOptions = {
   loadConfig: (configPath?: string) => LoadedConfig;
   resolveBundles: (config: Config, baseDir: string, configPath?: string) => ResolvedBundle[];
   bundleNeedsBuild: (bundle: ResolvedBundle) => boolean;
+  buildBundle: (bundle: ResolvedBundle, force: boolean, options?: { quiet?: boolean; onProgress?: (progress: BuildProgress) => void }) => Promise<boolean>;
   createOrUpdateBundle: (bundle: ResolvedBundle, force: boolean, options?: { quiet?: boolean }) => boolean;
   removeBundle: (bundle: ResolvedBundle, deleteProfile: boolean, options?: { quiet?: boolean }) => void;
   writeConfig: (configPath: string, config: Config) => void;
@@ -67,7 +68,7 @@ function BrowserfiTui({ options, onDone, onError }: { options: TuiOptions; onDon
   const [selected, setSelected] = useState(0);
   const [mode, setMode] = useState<Mode>({ type: "table" });
   const [message, setMessage] = useState("");
-  const [buildingName, setBuildingName] = useState<string | undefined>();
+  const [buildProgress, setBuildProgress] = useState<(BuildProgress & { name: string }) | undefined>();
   const [aerospaceInfo] = useState(loadAerospaceInfo);
 
   const bundles = useMemo(() => options.resolveBundles(loaded.config, loaded.baseDir, loaded.path), [loaded, options]);
@@ -89,7 +90,7 @@ function BrowserfiTui({ options, onDone, onError }: { options: TuiOptions; onDon
 
   useInput((input, key) => {
     try {
-      if (buildingName) return;
+      if (buildProgress) return;
 
       if (mode.type === "confirm") {
         if (input.toLowerCase() === "y") {
@@ -144,17 +145,20 @@ function BrowserfiTui({ options, onDone, onError }: { options: TuiOptions; onDon
         setMode({ type: "edit", initialValues: values, values, field: 0, fields, browserOptions, workspaceOptions: aerospaceInfo.workspaces });
       } else if (input === "b" && selectedBundle) {
         const bundle = selectedBundle;
-        setBuildingName(bundle.displayName);
+        setBuildProgress({ name: bundle.displayName, step: "Preparing", current: 0, total: 7 });
         setMessage("");
         setTimeout(() => {
           try {
-            options.createOrUpdateBundle(bundle, true, { quiet: true });
-            setMessage(`built ${bundle.key}`);
-            reload();
+            void options
+              .buildBundle(bundle, true, { quiet: true, onProgress: (progress) => setBuildProgress({ name: bundle.displayName, ...progress }) })
+              .then(() => {
+                setMessage(`built ${bundle.key}`);
+                reload();
+              }, handleError)
+              .finally(() => setBuildProgress(undefined));
           } catch (error) {
             handleError(error);
-          } finally {
-            setBuildingName(undefined);
+            setBuildProgress(undefined);
           }
         }, 0);
       } else if (input === "d" && selectedBundle) {
@@ -178,7 +182,7 @@ function BrowserfiTui({ options, onDone, onError }: { options: TuiOptions; onDon
       )}
       {mode.type === "confirm" && <Text color="yellow">{mode.message} y/n</Text>}
       {message && <Text color="cyan">{message}</Text>}
-      <Footer mode={mode.type} hasAerospace={Boolean(aerospaceInfo.configPath)} needsSave={needsSave} needsBuild={needsBuild} buildingName={buildingName} />
+      <Footer mode={mode.type} hasAerospace={Boolean(aerospaceInfo.configPath)} needsSave={needsSave} needsBuild={needsBuild} buildProgress={buildProgress} />
     </Box>
   );
 }
@@ -275,7 +279,7 @@ function EditForm({ mode, setMode }: { mode: Extract<Mode, { type: "edit" }>; se
   );
 }
 
-function Footer({ mode, hasAerospace, needsSave, needsBuild, buildingName }: { mode: Mode["type"]; hasAerospace?: boolean; needsSave?: boolean; needsBuild?: boolean; buildingName?: string }) {
+function Footer({ mode, hasAerospace, needsSave, needsBuild, buildProgress }: { mode: Mode["type"]; hasAerospace?: boolean; needsSave?: boolean; needsBuild?: boolean; buildProgress?: BuildProgress & { name: string } }) {
   const { stdout } = useStdout();
   const rule = "─".repeat(Math.max(20, stdout.columns ?? 80));
   if (mode === "edit") {
@@ -301,21 +305,24 @@ function Footer({ mode, hasAerospace, needsSave, needsBuild, buildingName }: { m
   }
   return (
     <Box flexDirection="column" marginTop={1}>
-      {buildingName ? <BuildProgress name={buildingName} /> : needsBuild && <Text bold color="#FFA500">Some apps need to be built (b) to build</Text>}
+      {buildProgress ? <BuildProgress progress={buildProgress} /> : needsBuild && <Text bold color="#FFA500">Some apps need to be built (b) to build</Text>}
       <Text color="gray">{rule}</Text>
       <Text color="gray">
         {"↑/↓ select • a add app • enter/e edit • "}
-        <Text bold={needsBuild || Boolean(buildingName)} color={needsBuild || buildingName ? "#FFA500" : "gray"}>{buildingName ? "building" : "b build"}</Text>
+        <Text bold={needsBuild || Boolean(buildProgress)} color={needsBuild || buildProgress ? "#FFA500" : "gray"}>{buildProgress ? "building" : "b build"}</Text>
         {hasAerospace ? " • d delete app • w aerospace • q quit" : " • d delete app • q quit"}
       </Text>
     </Box>
   );
 }
 
-function BuildProgress({ name }: { name: string }) {
+function BuildProgress({ progress }: { progress: BuildProgress & { name: string } }) {
+  const width = 16;
+  const filled = Math.max(0, Math.min(width, Math.round((progress.current / progress.total) * width)));
+  const bar = `${"█".repeat(filled)}${"░".repeat(width - filled)}`;
   return (
     <Text bold color="#FFA500">
-      Building {name} [████████░░░░░░░░]
+      Building {progress.name} [{bar}] {progress.current}/{progress.total} {progress.step}
     </Text>
   );
 }
