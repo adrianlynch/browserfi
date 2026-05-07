@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -11,7 +12,9 @@ const browserNames = ["chromium", "chrome", "chrome-canary", "brave", "edge", "f
 const spinnerFrames = ["*", "+", "-", "+"];
 const iconColors = ["", "#34CDD7", "#FFB000", "#FF5C8A", "#7C5CFF", "#2ECC71", "#FFFFFF", "#111111"];
 const REDRAW_INTERVAL_MS = 2000;
-const SELECTED_ROW_BACKGROUND = "#FFEAF3";
+const SELECTED_ROW_BACKGROUND_LIGHT = "#FFEAF3";
+const SELECTED_ROW_BACKGROUND_DARK = "#5A2438";
+const SELECTED_ROW_BACKGROUND = isDarkTerminal() ? SELECTED_ROW_BACKGROUND_DARK : SELECTED_ROW_BACKGROUND_LIGHT;
 
 type TuiOptions = {
   configPath?: string;
@@ -238,6 +241,20 @@ function BrowserfiTui({ options, onDone, onError, onRefresh }: { options: TuiOpt
 
 function isRefreshInput(input: string, key: { ctrl?: boolean; name?: string; raw?: string }): boolean {
   return (key.ctrl && (input === "k" || input === "l" || key.name === "k" || key.name === "l")) || input === "\u000b" || input === "\u000c" || key.raw === "\u000b" || key.raw === "\u000c";
+}
+
+function isDarkTerminal(): boolean {
+  const colorFgBg = process.env.COLORFGBG;
+  const background = colorFgBg?.split(";").at(-1);
+  if (background && /^\d+$/.test(background)) {
+    return Number(background) < 8;
+  }
+
+  try {
+    return execFileSync("defaults", ["read", "-g", "AppleInterfaceStyle"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim() === "Dark";
+  } catch {
+    return false;
+  }
 }
 
 function Header({ configPath, redrawToken }: { configPath: string; redrawToken: number }) {
