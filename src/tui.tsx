@@ -181,8 +181,7 @@ function BrowserfiTui({ options, onDone, onError }: { options: TuiOptions; onDon
         <Table bundles={bundles} selected={selected} showWorkspace={Boolean(aerospaceInfo.configPath)} bundleNeedsBuild={options.bundleNeedsBuild} />
       )}
       {mode.type === "confirm" && <Text color="yellow">{mode.message} y/n</Text>}
-      {message && <Text color="cyan">{message}</Text>}
-      <Footer mode={mode.type} hasAerospace={Boolean(aerospaceInfo.configPath)} needsSave={needsSave} needsBuild={needsBuild} buildProgress={buildProgress} />
+      <Footer mode={mode.type} hasAerospace={Boolean(aerospaceInfo.configPath)} needsSave={needsSave} needsBuild={needsBuild} buildProgress={buildProgress} notice={message} />
     </Box>
   );
 }
@@ -279,7 +278,7 @@ function EditForm({ mode, setMode }: { mode: Extract<Mode, { type: "edit" }>; se
   );
 }
 
-function Footer({ mode, hasAerospace, needsSave, needsBuild, buildProgress }: { mode: Mode["type"]; hasAerospace?: boolean; needsSave?: boolean; needsBuild?: boolean; buildProgress?: BuildProgress & { name: string } }) {
+function Footer({ mode, hasAerospace, needsSave, needsBuild, buildProgress, notice }: { mode: Mode["type"]; hasAerospace?: boolean; needsSave?: boolean; needsBuild?: boolean; buildProgress?: BuildProgress & { name: string }; notice?: string }) {
   const { stdout } = useStdout();
   const rule = "─".repeat(Math.max(20, stdout.columns ?? 80));
   if (mode === "edit") {
@@ -305,7 +304,13 @@ function Footer({ mode, hasAerospace, needsSave, needsBuild, buildProgress }: { 
   }
   return (
     <Box flexDirection="column" marginTop={1}>
-      {buildProgress ? <BuildProgress progress={buildProgress} /> : needsBuild && <Text bold color="#FFA500">Some apps need to be built (b) to build</Text>}
+      {buildProgress ? (
+        <BuildProgress progress={buildProgress} />
+      ) : needsBuild ? (
+        <Text bold color="#FFA500">Some apps need to be built (b) to build</Text>
+      ) : (
+        notice && <Text bold color="green">{notice}</Text>
+      )}
       <Text color="gray">{rule}</Text>
       <Text color="gray">
         {"↑/↓ select • a add app • enter/e edit • "}
