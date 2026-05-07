@@ -175,7 +175,7 @@ function Table({ bundles, selected, showWorkspace }: { bundles: ResolvedBundle[]
   return (
     <Box flexDirection="column">
       <Text color="gray">{tableBorder("top", widths)}</Text>
-      <Text color="gray">{tableRow(showWorkspace ? ["St", "Name", "Key", "Browser", "Workspace"] : ["St", "Name", "Key", "Browser"], widths)}</Text>
+      <Text color="gray">{tableRow(showWorkspace ? ["Status", "Name", "Key", "Browser", "Workspace"] : ["Status", "Name", "Key", "Browser"], widths)}</Text>
       <Text color="gray">{tableBorder("middle", widths)}</Text>
       {bundles.map((bundle, index) => {
         const active = index === selected;
@@ -293,11 +293,23 @@ function tableBorder(position: "top" | "middle" | "bottom", widths: number[]): s
 }
 
 function tableWidths(columns: number, showWorkspace: boolean): number[] {
-  if (!showWorkspace) return [5, 24, 28, 8];
-  const borderAndPadding = 3 * 5 + 6;
-  const fixedContent = 5 + 18 + 20 + 8;
-  const workspace = Math.max(12, columns - borderAndPadding - fixedContent);
-  return [5, 18, 20, 8, workspace];
+  const usableColumns = Math.max(40, columns - 2);
+  const base = showWorkspace ? [6, 16, 18, 8, 12] : [6, 22, 26, 8];
+  const tableOverhead = 3 * base.length + 1;
+  let remaining = Math.max(0, usableColumns - tableOverhead - sum(base));
+  const flexible = showWorkspace ? [1, 2, 4] : [1, 2];
+  while (remaining > 0) {
+    for (const index of flexible) {
+      if (remaining === 0) break;
+      base[index] += 1;
+      remaining -= 1;
+    }
+  }
+  return base;
+}
+
+function sum(values: number[]): number {
+  return values.reduce((total, value) => total + value, 0);
 }
 
 function fit(value: string, width: number): string {
