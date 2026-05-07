@@ -333,8 +333,8 @@ function Table({ bundles, selected, showWorkspace, bundleNeedsBuild, theme }: { 
           <DetailLine label="Name" value={selectedBundle.displayName} theme={theme} />
           <DetailLine label="App" value={selectedBundle.appName} theme={theme} />
           <DetailLine label="Icon" value={selectedBundle.icon ?? "icons/<key>.png|icns"} theme={theme} />
-          <DetailLine label="Icon color" value={selectedBundle.iconColor ?? "-"} theme={theme} />
-          <DetailLine label="Icon background" value={selectedBundle.iconBackgroundColor ?? "-"} theme={theme} />
+          <DetailLine label="Icon color" value={selectedBundle.iconColor ?? "-"} colorValue={selectedBundle.iconColor} theme={theme} />
+          <DetailLine label="Icon background" value={selectedBundle.iconBackgroundColor ?? "-"} colorValue={selectedBundle.iconBackgroundColor} theme={theme} />
           {showWorkspace && <DetailLine label="Workspace" value={selectedBundle.workspace ?? "-"} theme={theme} />}
           <DetailLine label="Profile" value={selectedBundle.profileDir} theme={theme} />
         </Box>
@@ -343,12 +343,18 @@ function Table({ bundles, selected, showWorkspace, bundleNeedsBuild, theme }: { 
   );
 }
 
-function DetailLine({ label, value, theme }: { label: string; value: string; theme: TuiTheme }) {
+function DetailLine({ label, value, colorValue, theme }: { label: string; value: string; colorValue?: string; theme: TuiTheme }) {
   return (
     <Text>
       {"   "}
       <Text color={theme.detailValueColor}>{label}:</Text>
       {" "}
+      {colorValue && (
+        <>
+          <ColorDot color={colorValue} theme={theme} />
+          {" "}
+        </>
+      )}
       <Text color={theme.detailLabelColor}>{value}</Text>
     </Text>
   );
