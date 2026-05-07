@@ -183,14 +183,14 @@ function Table({ bundles, selected, showWorkspace }: { bundles: ResolvedBundle[]
   return (
     <Box flexDirection="column">
       <Text color="gray">{tableBorder("top", widths)}</Text>
-      <Text color="gray">{tableRow(showWorkspace ? ["Stat", "Key", "Browser", "Workspace"] : ["Stat", "Key", "Browser"], widths)}</Text>
+      <Text color="gray">{tableRow(showWorkspace ? ["St", "Name", "Key", "Browser", "Workspace"] : ["St", "Name", "Key", "Browser"], widths)}</Text>
       <Text color="gray">{tableBorder("middle", widths)}</Text>
       {bundles.map((bundle, index) => {
         const active = index === selected;
         const status = existsSync(bundle.appPath) ? "ok" : "build";
         return (
           <Text key={bundle.key} inverse={active} color={status === "build" ? "yellow" : undefined}>
-            {tableRow(showWorkspace ? [status, bundle.key, bundle.browser, bundle.workspace ?? ""] : [status, bundle.key, bundle.browser], widths)}
+            {tableRow(showWorkspace ? [status, bundle.displayName, bundle.key, bundle.browser, bundle.workspace ?? ""] : [status, bundle.displayName, bundle.key, bundle.browser], widths)}
           </Text>
         );
       })}
@@ -301,11 +301,11 @@ function tableBorder(position: "top" | "middle" | "bottom", widths: number[]): s
 }
 
 function tableWidths(columns: number, showWorkspace: boolean): number[] {
-  if (!showWorkspace) return [4, 28, 8];
-  const borderAndPadding = 3 * 4 + 5;
-  const fixedContent = 4 + 28 + 8;
+  if (!showWorkspace) return [5, 24, 28, 8];
+  const borderAndPadding = 3 * 5 + 6;
+  const fixedContent = 5 + 18 + 20 + 8;
   const workspace = Math.max(12, columns - borderAndPadding - fixedContent);
-  return [4, 28, 8, workspace];
+  return [5, 18, 20, 8, workspace];
 }
 
 function fit(value: string, width: number): string {
