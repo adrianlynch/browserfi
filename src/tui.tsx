@@ -14,8 +14,8 @@ type TuiOptions = {
   configPath?: string;
   loadConfig: (configPath?: string) => LoadedConfig;
   resolveBundles: (config: Config, baseDir: string) => ResolvedBundle[];
-  createOrUpdateBundle: (bundle: ResolvedBundle, force: boolean) => boolean;
-  removeBundle: (bundle: ResolvedBundle, deleteProfile: boolean) => void;
+  createOrUpdateBundle: (bundle: ResolvedBundle, force: boolean, options?: { quiet?: boolean }) => boolean;
+  removeBundle: (bundle: ResolvedBundle, deleteProfile: boolean, options?: { quiet?: boolean }) => void;
   writeConfig: (configPath: string, config: Config) => void;
   aerospace: (options: { configPath?: string; aerospaceConfigPath?: string; write: boolean; reload: boolean }) => void;
 };
@@ -127,7 +127,7 @@ function BrowserfiTui({ options, onDone, onError }: { options: TuiOptions; onDon
       } else if (input === "a") {
         setMode({ type: "edit", values: newAppValues(loaded.config, aerospaceInfo, browserOptions), field: 0, fields, browserOptions, workspaceOptions: aerospaceInfo.workspaces });
       } else if (input === "b" && selectedBundle) {
-        options.createOrUpdateBundle(selectedBundle, true);
+        options.createOrUpdateBundle(selectedBundle, true, { quiet: true });
         setMessage(`built ${selectedBundle.key}`);
         reload();
       } else if (input === "d" && selectedBundle) {
@@ -400,7 +400,7 @@ function confirmDeleteApp(options: TuiOptions, loaded: LoadedConfig, bundle: Res
     type: "confirm",
     message: `Delete ${bundle.key}? This removes the app, profile data, and config row.`,
     run: () => {
-      options.removeBundle(bundle, true);
+      options.removeBundle(bundle, true, { quiet: true });
       removeConfigEntry(options, loaded, bundle.key);
       return `removed ${bundle.key}`;
     },

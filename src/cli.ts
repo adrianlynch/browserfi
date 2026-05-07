@@ -60,6 +60,7 @@ export type ResolvedBundle = {
 };
 
 type ListFormat = "table" | "wide" | "json" | "paths";
+type BundleOperationOptions = { quiet?: boolean };
 
 const DEFAULT_CONFIG = ".browserfi.toml";
 const KEY_PATTERN = /^[A-Za-z0-9._-]+$/;
@@ -507,8 +508,8 @@ function resolveBundle(config: Config, entry: BundleConfig, baseDir: string): Re
   };
 }
 
-function configureBundle(bundle: ResolvedBundle): void {
-  console.log("    setting bundle id and display name");
+function configureBundle(bundle: ResolvedBundle, options: BundleOperationOptions = {}): void {
+  log(options, "    setting bundle id and display name");
   const plist = join(bundle.appPath, "Contents/Info.plist");
   plistSetString(plist, "CFBundleIdentifier", bundle.bundleId);
   plistSetString(plist, "CFBundleName", bundle.displayName);
@@ -525,21 +526,21 @@ function configureBundle(bundle: ResolvedBundle): void {
   chmodSync(executablePath, 0o755);
 }
 
-export function createOrUpdateBundle(bundle: ResolvedBundle, force: boolean): boolean {
+export function createOrUpdateBundle(bundle: ResolvedBundle, force: boolean, options: BundleOperationOptions = {}): boolean {
   let changed = false;
 
   if (existsSync(bundle.appPath) && force) {
-    console.log("    removing existing bundle");
+    log(options, "    removing existing bundle");
     rmSync(bundle.appPath, { recursive: true, force: true });
   }
 
   if (!existsSync(bundle.appPath)) {
-    console.log(`    copying ${bundle.sourceApp} -> ${bundle.appPath}`);
+    log(options, `    copying ${bundle.sourceApp} -> ${bundle.appPath}`);
     copyAppBundle(bundle.sourceApp, bundle.appPath);
-    configureBundle(bundle);
+    configureBundle(bundle, options);
     changed = true;
   } else {
-    console.log("    bundle exists (use --force to rebuild)");
+    log(options, "    bundle exists (use --force to rebuild)");
   }
 
   return changed;
@@ -549,22 +550,26 @@ function copyAppBundle(sourceApp: string, appPath: string): void {
   run("/bin/cp", ["-R", sourceApp, appPath]);
 }
 
-export function removeBundle(bundle: ResolvedBundle, deleteProfile: boolean): void {
+export function removeBundle(bundle: ResolvedBundle, deleteProfile: boolean, options: BundleOperationOptions = {}): void {
   if (existsSync(bundle.appPath)) {
     rmSync(bundle.appPath, { recursive: true, force: true });
-    console.log(`removed ${bundle.appPath}`);
+    log(options, `removed ${bundle.appPath}`);
   } else {
-    console.log(`app not found at ${bundle.appPath}`);
+    log(options, `app not found at ${bundle.appPath}`);
   }
 
   if (deleteProfile) {
     if (existsSync(bundle.profileDir)) {
       rmSync(bundle.profileDir, { recursive: true, force: true });
-      console.log(`removed ${bundle.profileDir}`);
+      log(options, `removed ${bundle.profileDir}`);
     } else {
-      console.log(`profile not found at ${bundle.profileDir}`);
+      log(options, `profile not found at ${bundle.profileDir}`);
     }
   }
+}
+
+function log(options: BundleOperationOptions, message: string): void {
+  if (!options.quiet) console.log(message);
 }
 
 function wrapperScript(bundle: ResolvedBundle): string {
