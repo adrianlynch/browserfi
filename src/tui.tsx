@@ -1,13 +1,14 @@
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Box, Text, render, useApp, useInput, useStdout } from "ink";
 import TextInput from "ink-text-input";
 import { parse as parseToml } from "smol-toml";
 import type { BuildProgress, BundleConfig, Config, LoadedConfig, ResolvedBundle } from "./cli.js";
 
 const browserNames = ["chromium", "chrome", "chrome-canary", "brave", "edge", "firefox"];
+const spinnerFrames = ["*", "+", "x", "+"];
 
 type TuiOptions = {
   configPath?: string;
@@ -69,6 +70,7 @@ function BrowserfiTui({ options, onDone, onError }: { options: TuiOptions; onDon
   const [mode, setMode] = useState<Mode>({ type: "table" });
   const [message, setMessage] = useState("");
   const [buildProgress, setBuildProgress] = useState<(BuildProgress & { name: string }) | undefined>();
+  const [spinnerFrame, setSpinnerFrame] = useState(0);
   const [aerospaceInfo] = useState(loadAerospaceInfo);
 
   const bundles = useMemo(() => options.resolveBundles(loaded.config, loaded.baseDir, loaded.path), [loaded, options]);
@@ -87,6 +89,12 @@ function BrowserfiTui({ options, onDone, onError }: { options: TuiOptions; onDon
     setMessage(error instanceof Error ? error.message : String(error));
     onError(error);
   };
+
+  useEffect(() => {
+    if (!buildProgress) return undefined;
+    const timer = setInterval(() => setSpinnerFrame((frame) => (frame + 1) % spinnerFrames.length), 120);
+    return () => clearInterval(timer);
+  }, [buildProgress]);
 
   useInput((input, key) => {
     try {
@@ -181,7 +189,15 @@ function BrowserfiTui({ options, onDone, onError }: { options: TuiOptions; onDon
         <Table bundles={bundles} selected={selected} showWorkspace={Boolean(aerospaceInfo.configPath)} bundleNeedsBuild={options.bundleNeedsBuild} />
       )}
       {mode.type === "confirm" && <Text color="yellow">{mode.message} y/n</Text>}
-      <Footer mode={mode.type} hasAerospace={Boolean(aerospaceInfo.configPath)} needsSave={needsSave} needsBuild={needsBuild} buildProgress={buildProgress} notice={message} />
+      <Footer
+        mode={mode.type}
+        hasAerospace={Boolean(aerospaceInfo.configPath)}
+        needsSave={needsSave}
+        needsBuild={needsBuild}
+        buildProgress={buildProgress}
+        spinner={spinnerFrames[(spinnerFrame + (buildProgress?.current ?? 0)) % spinnerFrames.length]}
+        notice={message}
+      />
     </Box>
   );
 }
@@ -278,7 +294,7 @@ function EditForm({ mode, setMode }: { mode: Extract<Mode, { type: "edit" }>; se
   );
 }
 
-function Footer({ mode, hasAerospace, needsSave, needsBuild, buildProgress, notice }: { mode: Mode["type"]; hasAerospace?: boolean; needsSave?: boolean; needsBuild?: boolean; buildProgress?: BuildProgress & { name: string }; notice?: string }) {
+function Footer({ mode, hasAerospace, needsSave, needsBuild, buildProgress, spinner, notice }: { mode: Mode["type"]; hasAerospace?: boolean; needsSave?: boolean; needsBuild?: boolean; buildProgress?: BuildProgress & { name: string }; spinner: string; notice?: string }) {
   const { stdout } = useStdout();
   const rule = "─".repeat(Math.max(20, stdout.columns ?? 80));
   if (mode === "edit") {
@@ -305,7 +321,7 @@ function Footer({ mode, hasAerospace, needsSave, needsBuild, buildProgress, noti
   return (
     <Box flexDirection="column" marginTop={1}>
       {buildProgress ? (
-        <BuildProgress progress={buildProgress} />
+        <BuildProgress progress={buildProgress} spinner={spinner} />
       ) : needsBuild ? (
         <Text bold color="#FFA500">Some apps need to be built (b) to build</Text>
       ) : (
@@ -321,13 +337,13 @@ function Footer({ mode, hasAerospace, needsSave, needsBuild, buildProgress, noti
   );
 }
 
-function BuildProgress({ progress }: { progress: BuildProgress & { name: string } }) {
+function BuildProgress({ progress, spinner }: { progress: BuildProgress & { name: string }; spinner: string }) {
   const width = 16;
   const filled = Math.max(0, Math.min(width, Math.round((progress.current / progress.total) * width)));
   const bar = `${"█".repeat(filled)}${"░".repeat(width - filled)}`;
   return (
     <Text bold color="#FFA500">
-      Building {progress.name} [{bar}] {progress.current}/{progress.total} {progress.step}
+      {spinner} Building {progress.name} [{bar}] {progress.current}/{progress.total} {progress.step}
     </Text>
   );
 }
