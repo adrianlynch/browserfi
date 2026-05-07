@@ -8,7 +8,7 @@ import { parse as parseToml } from "smol-toml";
 import type { BuildProgress, BundleConfig, Config, LoadedConfig, ResolvedBundle } from "./cli.js";
 
 const browserNames = ["chromium", "chrome", "chrome-canary", "brave", "edge", "firefox"];
-const spinnerFrames = ["*", "+", "x", "+"];
+const spinnerFrames = ["*", "+", "-", "+"];
 
 type TuiOptions = {
   configPath?: string;
