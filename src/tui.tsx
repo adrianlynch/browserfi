@@ -399,9 +399,9 @@ function tableRow(values: string[], widths: number[]): string {
 
 function tableBorder(position: "top" | "middle" | "bottom", widths: number[]): string {
   const chars = {
-    top: ["┌", "┬", "┐"],
+    top: ["╭", "┬", "╮"],
     middle: ["├", "┼", "┤"],
-    bottom: ["└", "┴", "┘"],
+    bottom: ["╰", "┴", "╯"],
   }[position];
   return `${chars[0]}${widths.map((width) => "─".repeat(width + 2)).join(chars[1])}${chars[2]}`;
 }
