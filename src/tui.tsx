@@ -152,7 +152,7 @@ function BrowserfiTui({ options, onDone, onError }: { options: TuiOptions; onDon
             void options
               .buildBundle(bundle, true, { quiet: true, onProgress: (progress) => setBuildProgress({ name: bundle.displayName, ...progress }) })
               .then(() => {
-                setMessage(`built ${bundle.key}`);
+                setMessage(`✓ Built ${bundle.key}`);
                 reload();
               }, handleError)
               .finally(() => setBuildProgress(undefined));
