@@ -373,9 +373,11 @@ function EditForm({ mode, setMode }: { mode: Extract<Mode, { type: "edit" }>; se
             ) : index === mode.field && item.key === "workspace" ? (
               <Text color="cyan">{mode.values.workspace || "-"} {mode.picker === "workspace" ? "" : "(enter to choose)"}</Text>
             ) : index === mode.field && item.key === "iconColor" ? (
-              <Text color="cyan">{mode.values.iconColor || "default"} {mode.picker === "iconColor" ? "" : "(enter to choose)"}</Text>
+              <ColorValue value={mode.values.iconColor} active suffix={mode.picker === "iconColor" ? "" : " (enter to choose)"} />
             ) : index === mode.field && item.key === "iconBackgroundColor" ? (
-              <Text color="cyan">{mode.values.iconBackgroundColor || "default"} {mode.picker === "iconBackgroundColor" ? "" : "(enter to choose)"}</Text>
+              <ColorValue value={mode.values.iconBackgroundColor} active suffix={mode.picker === "iconBackgroundColor" ? "" : " (enter to choose)"} />
+            ) : item.key === "iconColor" || item.key === "iconBackgroundColor" ? (
+              <ColorValue value={mode.values[item.key]} />
             ) : (
               <Text>{mode.values[item.key] || "-"}</Text>
             )}
@@ -405,24 +407,37 @@ function EditForm({ mode, setMode }: { mode: Extract<Mode, { type: "edit" }>; se
       {mode.picker === "iconColor" && (
         <Box flexDirection="column" marginTop={1}>
           {iconColors.map((color) => (
-            <Text key={color || "default"} color={color || "gray"}>
-              {color === mode.values.iconColor ? "› " : "  "}
-              {color || "default"}
-            </Text>
+            <PickerColor key={color || "default"} color={color} selected={color === mode.values.iconColor} />
           ))}
         </Box>
       )}
       {mode.picker === "iconBackgroundColor" && (
         <Box flexDirection="column" marginTop={1}>
           {iconColors.map((color) => (
-            <Text key={color || "default"} color={color || "gray"}>
-              {color === mode.values.iconBackgroundColor ? "› " : "  "}
-              {color || "default"}
-            </Text>
+            <PickerColor key={color || "default"} color={color} selected={color === mode.values.iconBackgroundColor} />
           ))}
         </Box>
       )}
     </Box>
+  );
+}
+
+function ColorValue({ value, active = false, suffix = "" }: { value: string; active?: boolean; suffix?: string }) {
+  return (
+    <Text>
+      <Text color={value || "gray"}>●</Text>
+      <Text color={active ? "cyan" : undefined}> {value || "default"}{suffix}</Text>
+    </Text>
+  );
+}
+
+function PickerColor({ color, selected }: { color: string; selected: boolean }) {
+  return (
+    <Text>
+      <Text color={selected ? "cyan" : "gray"}>{selected ? "› " : "  "}</Text>
+      <Text color={color || "gray"}>●</Text>
+      <Text color={selected ? "cyan" : undefined}> {color || "default"}</Text>
+    </Text>
   );
 }
 
