@@ -43,6 +43,8 @@ const EDIT_PADDING_X = 2;
 const EDIT_LABEL_WIDTH = 22;
 const LABEL_COLOR = "#777777";
 const ICON_PLACEHOLDER = "- url to svg, png or jpg -";
+const COLOR_PICKER_LABEL_WIDTH = 12;
+const COLOR_PREVIEW_SIZE = 3;
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const PACKAGE_VERSION = readPackageVersion();
 
@@ -483,18 +485,10 @@ function EditForm({ mode, setMode, theme }: { mode: Extract<Mode, { type: "edit"
         </Box>
       )}
       {mode.picker === "iconColor" && (
-        <Box flexDirection="column" marginTop={1}>
-          {iconColors.map((color) => (
-            <PickerColor key={color || "default"} color={color} selected={color === mode.values.iconColor} theme={theme} />
-          ))}
-        </Box>
+        <ColorPicker colors={iconColors} selectedColor={mode.values.iconColor} theme={theme} />
       )}
       {mode.picker === "iconBackgroundColor" && (
-        <Box flexDirection="column" marginTop={1}>
-          {iconColors.map((color) => (
-            <PickerColor key={color || "default"} color={color} selected={color === mode.values.iconBackgroundColor} theme={theme} />
-          ))}
-        </Box>
+        <ColorPicker colors={iconColors} selectedColor={mode.values.iconBackgroundColor} theme={theme} />
       )}
     </Box>
   );
@@ -509,14 +503,55 @@ function ColorValue({ value, active = false, suffix = "", theme }: { value: stri
   );
 }
 
+function ColorPicker({ colors, selectedColor, theme }: { colors: string[]; selectedColor: string; theme: TuiTheme }) {
+  const selectedIndex = Math.max(0, colors.indexOf(selectedColor));
+  const maxStart = Math.max(0, colors.length - COLOR_PREVIEW_SIZE);
+  const previewStart = Math.min(Math.max(0, selectedIndex - 1), maxStart);
+  return (
+    <Box flexDirection="row" marginTop={1}>
+      <Box flexDirection="column">
+        {colors.map((color) => (
+          <PickerColor key={color || "default"} color={color} selected={color === selectedColor} theme={theme} />
+        ))}
+      </Box>
+      <Box flexDirection="column" marginLeft={2}>
+        {colors.map((color, index) => (
+          <ColorPreviewRow
+            key={color || "default"}
+            color={selectedColor}
+            showPreview={index >= previewStart && index < previewStart + COLOR_PREVIEW_SIZE}
+            showArrow={index === selectedIndex}
+            theme={theme}
+          />
+        ))}
+      </Box>
+    </Box>
+  );
+}
+
 function PickerColor({ color, selected, theme }: { color: string; selected: boolean; theme: TuiTheme }) {
+  const label = color || "default";
   return (
     <Text>
       <Text color={selected ? "cyan" : "gray"}>{selected ? "› " : "  "}</Text>
       <ColorDot color={color} theme={theme} />
-      <Text color={selected ? "cyan" : undefined}> {color || "default"}</Text>
+      <Text color={selected ? "cyan" : undefined}> {label.padEnd(COLOR_PICKER_LABEL_WIDTH)}</Text>
     </Text>
   );
+}
+
+function ColorPreviewRow({ color, showPreview, showArrow, theme }: { color: string; showPreview: boolean; showArrow: boolean; theme: TuiTheme }) {
+  return (
+    <Text>
+      <Text color="gray">{showArrow ? "◀ " : "  "}</Text>
+      {showPreview ? <ColorBlock color={color} theme={theme} /> : <Text>{" ".repeat(COLOR_PREVIEW_SIZE)}</Text>}
+    </Text>
+  );
+}
+
+function ColorBlock({ color, theme }: { color: string; theme: TuiTheme }) {
+  const fallbackColor = theme.isDark ? "#FFFFFF" : "#000000";
+  return <Text color={color || fallbackColor}>{"█".repeat(COLOR_PREVIEW_SIZE)}</Text>;
 }
 
 function ColorDot({ color, backgroundColor, blankWhenEmpty = false, theme }: { color?: string; backgroundColor?: string; blankWhenEmpty?: boolean; theme: TuiTheme }) {
