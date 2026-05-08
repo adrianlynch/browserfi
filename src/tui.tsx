@@ -60,6 +60,7 @@ type EditValues = {
   icon: string;
   iconColor: string;
   iconBackgroundColor: string;
+  iconInset: boolean;
   workspace: string;
 };
 
@@ -78,6 +79,7 @@ const baseFields: EditField[] = [
   { key: "icon", label: "Icon" },
   { key: "iconColor", label: "Icon color" },
   { key: "iconBackgroundColor", label: "Icon background" },
+  { key: "iconInset", label: "Indent icon" },
 ];
 
 export function runTui(options: TuiOptions): Promise<void> {
@@ -171,6 +173,8 @@ function BrowserfiTui({ options, onDone, onError, onRefresh }: { options: TuiOpt
           setMode({ ...mode, values: { ...mode.values, iconBackgroundColor: nextOption(iconColors, mode.values.iconBackgroundColor, direction) } });
         } else if (mode.picker && key.return) {
           setMode({ ...mode, picker: undefined });
+        } else if ((key.return || input === " ") && mode.fields[mode.field]?.key === "iconInset") {
+          setMode({ ...mode, values: { ...mode.values, iconInset: !mode.values.iconInset } });
         } else if (key.upArrow || input === "k") {
           setMode({ ...mode, field: Math.max(0, mode.field - 1), picker: undefined });
         } else if (key.downArrow || input === "j") {
@@ -352,6 +356,7 @@ function Table({ bundles, selected, showWorkspace, bundleNeedsBuild, theme }: { 
           <DetailLine label="Icon" value={selectedBundle.icon ?? "icons/<key>.png|icns"} theme={theme} />
           <DetailLine label="Icon color" value={selectedBundle.iconColor ?? "-"} colorValue={selectedBundle.iconColor} theme={theme} />
           <DetailLine label="Icon background" value={selectedBundle.iconBackgroundColor ?? "-"} colorValue={selectedBundle.iconBackgroundColor} theme={theme} />
+          <DetailLine label="Indent icon" value={selectedBundle.iconInset ? "yes" : "no"} theme={theme} />
           {showWorkspace && <DetailLine label="Workspace" value={selectedBundle.workspace ?? "-"} theme={theme} />}
         </Box>
       )}
@@ -407,9 +412,9 @@ function EditForm({ mode, setMode, theme }: { mode: Extract<Mode, { type: "edit"
             <Box width={EDIT_LABEL_WIDTH}>
               <Text color={index === mode.field ? "cyan" : undefined}>{item.label}</Text>
             </Box>
-            {index === mode.field && item.key !== "workspace" && item.key !== "browser" && item.key !== "iconColor" && item.key !== "iconBackgroundColor" ? (
+            {index === mode.field && item.key !== "workspace" && item.key !== "browser" && item.key !== "iconColor" && item.key !== "iconBackgroundColor" && item.key !== "iconInset" ? (
               <TextInput
-                value={mode.values[item.key]}
+                value={String(mode.values[item.key])}
                 onChange={(value) => setMode({ ...mode, values: { ...mode.values, [field.key]: value } })}
               />
             ) : index === mode.field && item.key === "browser" ? (
@@ -422,8 +427,10 @@ function EditForm({ mode, setMode, theme }: { mode: Extract<Mode, { type: "edit"
               <ColorValue value={mode.values.iconBackgroundColor} active suffix={mode.picker === "iconBackgroundColor" ? "" : " (enter to choose)"} theme={theme} />
             ) : item.key === "iconColor" || item.key === "iconBackgroundColor" ? (
               <ColorValue value={mode.values[item.key]} theme={theme} />
+            ) : item.key === "iconInset" ? (
+              <Text color={index === mode.field ? "cyan" : undefined}>{mode.values.iconInset ? "☑" : "☐"} indent SVG artwork</Text>
             ) : (
-              <Text>{fit(mode.values[item.key] || "-", valueWidth)}</Text>
+              <Text>{fit(String(mode.values[item.key]) || "-", valueWidth)}</Text>
             )}
           </Box>
         ))}
@@ -611,6 +618,7 @@ function editValues(bundle: ResolvedBundle, aerospaceInfo: AerospaceInfo): EditV
     icon: bundle.icon ?? "",
     iconColor: bundle.iconColor ?? "",
     iconBackgroundColor: bundle.iconBackgroundColor ?? "",
+    iconInset: bundle.iconInset,
     workspace: bundle.workspace ?? aerospaceInfo.workspaces[0] ?? "",
   };
 }
@@ -623,6 +631,7 @@ function newAppValues(aerospaceInfo: AerospaceInfo, browserOptions: string[]): E
     icon: "",
     iconColor: "",
     iconBackgroundColor: "",
+    iconInset: true,
     workspace: aerospaceInfo.workspaces[0] ?? "",
   };
 }
@@ -643,6 +652,7 @@ function saveEdit(options: TuiOptions, loaded: LoadedConfig, originalKey: string
     icon: values.icon.trim() || undefined,
     iconColor: values.iconColor || undefined,
     iconBackgroundColor: values.iconBackgroundColor || undefined,
+    iconInset: values.iconInset ? undefined : false,
     workspace: values.workspace || undefined,
   };
 
