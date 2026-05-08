@@ -176,7 +176,7 @@ Each bundle supports:
 - `icon`: optional `.svg`, `.png`, `.jpg`, `.jpeg`, or `.icns` path or URL for this app
 - `iconColor`: optional SVG tint color, as a 6-digit hex value like `#34CDD7`
 - `iconBackgroundColor`: optional SVG background color, as a 6-digit hex value like `#111111`
-- `iconInset`: optional SVG/PNG/JPG artwork inset toggle; defaults to `true`
+- `iconInset`: optional SVG/PNG/JPG artwork inset size: `none`, `small`, `medium`, or `large`; defaults to `none`
 - `workspace`: optional AeroSpace workspace for printed rules
 - `sourceApp`: optional override for the source `.app`
 - `installDir`, `profilesDir`, `iconsDir`: optional per-bundle path overrides
@@ -212,7 +212,7 @@ displayName = "Docs"
 icon = "https://example.com/icon.svg"
 iconColor = "#34CDD7"
 iconBackgroundColor = "#111111"
-iconInset = true
+iconInset = "small"
 ```
 
 If `icon` is not set, Browserfi looks for a square PNG or JPG, ideally `1024x1024`,
@@ -231,10 +231,11 @@ downloads URL icons during build, converts SVG, PNG, and JPG files to ICNS, repl
 re-signs ad-hoc, and refreshes Launch Services.
 
 Image icons are normalized onto a `1024x1024` canvas before conversion. Browserfi
-preserves SVG `viewBox` values, insets SVG/PNG/JPG artwork slightly so it does
+preserves SVG `viewBox` values, optionally insets SVG/PNG/JPG artwork so it does
 not touch the macOS icon edges, optionally tints SVG non-`none` fills and strokes
 with `iconColor`, and optionally paints `iconBackgroundColor` behind SVG artwork.
-Set `iconInset = false` if the icon already includes the padding you want.
+Set `iconInset` to `none`, `small`, `medium`, or `large`; these map to `0px`,
+`96px`, `192px`, and `288px` padding on each side of the `1024x1024` canvas.
 ICNS icons are used as supplied.
 
 The legacy helper [build-icon.sh](build-icon.sh) can still build a simple

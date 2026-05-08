@@ -7,7 +7,7 @@ browser = "chromium"
 key = "my-project"
 displayName = "My Project"
 workspace = "4_Project"
-iconInset = true
+iconInset = "small"
 
 [[bundles]]
 browser = "chrome"

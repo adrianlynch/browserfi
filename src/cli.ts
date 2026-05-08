@@ -8,6 +8,7 @@ import { parse as parseToml, stringify as stringifyToml } from "smol-toml";
 import { runTui } from "./tui.js";
 
 export type BrowserName = "chromium" | "chrome" | "chrome-canary" | "brave" | "edge" | "firefox";
+export type IconInset = "none" | "small" | "medium" | "large";
 
 export type BundleConfig = {
   id?: string;
@@ -18,7 +19,7 @@ export type BundleConfig = {
   icon?: string;
   iconColor?: string;
   iconBackgroundColor?: string;
-  iconInset?: boolean;
+  iconInset?: boolean | IconInset;
   sourceApp?: string;
   installDir?: string;
   profilesDir?: string;
@@ -61,7 +62,7 @@ export type ResolvedBundle = {
   iconUrl?: string;
   iconColor?: string;
   iconBackgroundColor?: string;
-  iconInset: boolean;
+  iconInset: IconInset;
   sourceApp: string;
   appName: string;
   appPath: string;
@@ -85,7 +86,12 @@ const DEFAULT_CONFIG = ".browserfi.toml";
 const KEY_PATTERN = /^[A-Za-z0-9._-]+$/;
 const HEX_COLOR_PATTERN = /^#[0-9A-Fa-f]{6}$/;
 const SVG_BACKGROUND_PLACEHOLDER = "__BROWSERFI_ICON_BACKGROUND__";
-const SVG_ICON_PADDING = 96;
+const ICON_INSET_PIXELS: Record<IconInset, number> = {
+  none: 0,
+  small: 96,
+  medium: 192,
+  large: 288,
+};
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const AEROSPACE_BEGIN = "# BEGIN browserfi";
 const AEROSPACE_END = "# END browserfi";
@@ -391,7 +397,7 @@ function toListItem(bundle: ResolvedBundle): Record<string, string | undefined> 
     iconUrl: bundle.iconUrl,
     iconColor: bundle.iconColor,
     iconBackgroundColor: bundle.iconBackgroundColor,
-    iconInset: String(bundle.iconInset),
+    iconInset: bundle.iconInset,
     appPath: bundle.appPath,
     profileDir: bundle.profileDir,
     bundleId: bundle.bundleId,
@@ -420,7 +426,7 @@ function printWideTable(bundles: ResolvedBundle[]): void {
     bundle.icon ?? "",
     bundle.iconColor ?? "",
     bundle.iconBackgroundColor ?? "",
-    String(bundle.iconInset),
+    bundle.iconInset,
     bundle.workspace ?? "",
     bundle.bundleId,
     bundle.appPath,
@@ -540,7 +546,7 @@ function resolveBundle(config: Config, entry: BundleConfig, baseDir: string, con
   const iconPath = entry.icon && !iconUrl ? resolvePath(entry.icon, baseDir) : undefined;
   const iconColor = entry.iconColor?.trim();
   const iconBackgroundColor = entry.iconBackgroundColor?.trim();
-  const iconInset = entry.iconInset ?? true;
+  const iconInset = resolveIconInset(entry.iconInset);
 
   if (!existsSync(sourceApp)) {
     throw new Error(`source app not found at ${sourceApp}`);
@@ -577,6 +583,14 @@ function resolveBundle(config: Config, entry: BundleConfig, baseDir: string, con
     profileArgs: browser.profileArgs(profileDir),
     iconsDir,
   };
+}
+
+function resolveIconInset(value: BundleConfig["iconInset"]): IconInset {
+  if (value === undefined) return "none";
+  if (value === true) return "small";
+  if (value === false) return "none";
+  if (value in ICON_INSET_PIXELS) return value;
+  throw new Error(`invalid iconInset "${value}". Use none, small, medium, or large.`);
 }
 
 function configureBundle(bundle: ResolvedBundle, options: BundleOperationOptions = {}): void {
@@ -806,7 +820,7 @@ function applyIcon(bundle: ResolvedBundle): boolean {
     }
 
     if (isRasterIconPath(lowerIconPath)) {
-      const raster = prepareRasterIcon(resolved.path, bundle.iconInset, bundle.iconBackgroundColor);
+      const raster = prepareRasterIcon(resolved.path, iconInsetPixels(bundle.iconInset), bundle.iconBackgroundColor);
       try {
         pngToIcns(raster.path, dest);
       } finally {
@@ -816,7 +830,7 @@ function applyIcon(bundle: ResolvedBundle): boolean {
     }
 
     if (lowerIconPath.endsWith(".svg")) {
-      const svg = prepareSvgIcon(resolved.path, bundle.iconColor, bundle.iconBackgroundColor, bundle.iconInset);
+      const svg = prepareSvgIcon(resolved.path, bundle.iconColor, bundle.iconBackgroundColor, iconInsetPixels(bundle.iconInset));
       try {
         const png = svgToPng(svg.path);
         try {
@@ -914,7 +928,7 @@ function svgToPng(src: string): { path: string; cleanup: () => void } {
   }
 }
 
-function prepareSvgIcon(src: string, color?: string, backgroundColor?: string, inset = true): { path: string; cleanup: () => void } {
+function prepareSvgIcon(src: string, color?: string, backgroundColor?: string, insetPixels = 0): { path: string; cleanup: () => void } {
   const work = mkdtempSync(join(tmpdir(), "browserfi-color-"));
   const dest = join(work, "icon.svg");
   const raw = readFileSync(src, "utf8");
@@ -931,7 +945,7 @@ function prepareSvgIcon(src: string, color?: string, backgroundColor?: string, i
         .replace(/\sstroke\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "");
       const tint = color ? ` color="${color}" fill="${color}"` : "";
       const background = backgroundColor ? `<rect x="${sourceViewBox?.[0] ?? 0}" y="${sourceViewBox?.[1] ?? 0}" width="${sourceViewBox?.[2] ?? 1024}" height="${sourceViewBox?.[3] ?? 1024}" fill="none" data-browserfi-background="${SVG_BACKGROUND_PLACEHOLDER}"/>` : "";
-      const transform = inset ? ` transform="${svgInsetTransform(sourceViewBox)}"` : "";
+      const transform = insetPixels > 0 ? ` transform="${svgInsetTransform(sourceViewBox, insetPixels)}"` : "";
       return `<svg${withoutInherited}${viewBox} width="1024" height="1024"${tint}>${background}<g${transform}>`;
     })
     .replace(/<\/svg\s*>/i, "</g></svg>")
@@ -944,11 +958,11 @@ function prepareSvgIcon(src: string, color?: string, backgroundColor?: string, i
   return { path: dest, cleanup: () => rmSync(work, { recursive: true, force: true }) };
 }
 
-function prepareRasterIcon(src: string, inset: boolean, backgroundColor?: string): { path: string; cleanup?: () => void } {
-  if (!inset) return { path: src };
+function prepareRasterIcon(src: string, insetPixels: number, backgroundColor?: string): { path: string; cleanup?: () => void } {
+  if (insetPixels <= 0) return { path: src };
 
   const work = mkdtempSync(join(tmpdir(), "browserfi-raster-icon-"));
-  const size = 1024 - (SVG_ICON_PADDING * 2);
+  const size = 1024 - (insetPixels * 2);
   const resized = join(work, "resized.png");
   const padded = join(work, "padded.png");
 
@@ -980,12 +994,16 @@ function svgViewBox(svgAttrs: string): [number, number, number, number] | undefi
   return values.length === 4 && values.every(Number.isFinite) ? values as [number, number, number, number] : undefined;
 }
 
-function svgInsetTransform(viewBox?: [number, number, number, number]): string {
+function svgInsetTransform(viewBox: [number, number, number, number] | undefined, insetPixels: number): string {
   const [minX = 0, minY = 0, width = 1024, height = 1024] = viewBox ?? [];
-  const scale = Math.max(0.1, (1024 - (SVG_ICON_PADDING * 2)) / 1024);
+  const scale = Math.max(0.1, (1024 - (insetPixels * 2)) / 1024);
   const translateX = minX + ((width - (width * scale)) / 2) - (minX * scale);
   const translateY = minY + ((height - (height * scale)) / 2) - (minY * scale);
   return `translate(${translateX} ${translateY}) scale(${scale})`;
+}
+
+function iconInsetPixels(inset: IconInset): number {
+  return ICON_INSET_PIXELS[inset];
 }
 
 function inferredViewBox(svgAttrs: string): [number, number, number, number] | undefined {
