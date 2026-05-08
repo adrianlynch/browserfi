@@ -308,7 +308,7 @@ function Header({ configPath, redrawToken }: { configPath: string; redrawToken: 
     <Box flexDirection="column" marginBottom={1}>
       <Text>
         <Text bold color="magenta">Browserfi</Text>
-        <Text color="#777777"> {PACKAGE_VERSION}</Text>
+        <Text color="#777777"> v{PACKAGE_VERSION}</Text>
       </Text>
       <Text>create and manage custom bundled browsers</Text>
       <Text color="gray">Config: {configPath}{redrawToken % 2 === 0 ? "" : " "}</Text>
