@@ -541,17 +541,17 @@ function PickerColor({ color, selected, theme }: { color: string; selected: bool
 }
 
 function ColorPreviewRow({ color, showPreview, showArrow, theme }: { color: string; showPreview: boolean; showArrow: boolean; theme: TuiTheme }) {
+  const previewColor = color || (theme.isDark ? "#FFFFFF" : "#000000");
   return (
     <Text>
-      <Text color="gray">{showArrow ? "◀ " : "  "}</Text>
+      <Text color={showArrow ? previewColor : "gray"}>{showArrow ? "◀" : " "}</Text>
       {showPreview ? <ColorBlock color={color} theme={theme} /> : <Text>{" ".repeat(COLOR_PREVIEW_SIZE)}</Text>}
     </Text>
   );
 }
 
 function ColorBlock({ color, theme }: { color: string; theme: TuiTheme }) {
-  const fallbackColor = theme.isDark ? "#FFFFFF" : "#000000";
-  return <Text color={color || fallbackColor}>{"█".repeat(COLOR_PREVIEW_SIZE)}</Text>;
+  return <Text color={color || (theme.isDark ? "#FFFFFF" : "#000000")}>{"█".repeat(COLOR_PREVIEW_SIZE)}</Text>;
 }
 
 function ColorDot({ color, backgroundColor, blankWhenEmpty = false, theme }: { color?: string; backgroundColor?: string; blankWhenEmpty?: boolean; theme: TuiTheme }) {
