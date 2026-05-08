@@ -40,6 +40,7 @@ const iconColors = [
 const REDRAW_INTERVAL_MS = 2000;
 const SELECTED_ROW_BACKGROUND_LIGHT = "#FFEAF3";
 const SELECTED_ROW_BACKGROUND_DARK = "#5A2438";
+const BUILD_COLOR = "#3B82F6";
 const TABLE_PADDING_X = 2;
 const EDIT_PADDING_X = 2;
 const EDIT_LABEL_WIDTH = 22;
@@ -634,7 +635,7 @@ function Footer({ mode, hasAerospace, needsSave, needsBuild, buildProgress, spin
       {buildProgress ? <BuildProgressRule progress={buildProgress} width={rule.length} /> : <Text color="gray">{rule}</Text>}
       <Text color="gray">
         {"↑/↓ select • a add app • enter/e edit • "}
-        <Text bold={needsBuild || Boolean(buildProgress)} color={needsBuild || buildProgress ? "#FFA500" : "gray"}>{buildProgress ? "building" : "b build"}</Text>
+        <Text bold={needsBuild || Boolean(buildProgress)} color={buildProgress ? BUILD_COLOR : needsBuild ? "#FFA500" : "gray"}>{buildProgress ? "building" : "b build"}</Text>
         {hasAerospace ? " • d delete app • w aerospace • q quit" : " • d delete app • q quit"}
       </Text>
     </Box>
@@ -651,7 +652,7 @@ function BuildProgressStatus({ progress, spinner }: { progress: BuildProgress & 
   const rightLabel = `${String(percent).padStart(3)}%  ${name}`.padStart(rightWidth);
   const spacer = " ".repeat(Math.max(1, terminalWidth - leftLabel.length - rightLabel.length));
   return (
-    <Text color="#FFA500">
+    <Text color={BUILD_COLOR}>
       {leftLabel}
       {spacer}
       {rightLabel}
@@ -666,8 +667,8 @@ function BuildProgressRule({ progress, width }: { progress: BuildProgress; width
   const empty = Math.max(0, width - filled - marker);
   return (
     <Text>
-      <Text bold color="#FFA500">{"━".repeat(filled)}</Text>
-      {marker ? <Text bold color="#FFA500">╸</Text> : null}
+      <Text bold color={BUILD_COLOR}>{"━".repeat(filled)}</Text>
+      {marker ? <Text bold color={BUILD_COLOR}>╸</Text> : null}
       <Text color="gray">{"─".repeat(empty)}</Text>
     </Text>
   );
