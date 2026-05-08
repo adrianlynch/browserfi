@@ -42,6 +42,7 @@ const TABLE_PADDING_X = 2;
 const EDIT_PADDING_X = 2;
 const EDIT_LABEL_WIDTH = 22;
 const LABEL_COLOR = "#777777";
+const ICON_PLACEHOLDER = "- url to svg, png or jpg -";
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const PACKAGE_VERSION = readPackageVersion();
 
@@ -454,6 +455,8 @@ function EditForm({ mode, setMode, theme }: { mode: Extract<Mode, { type: "edit"
               <ColorValue value={mode.values[item.key]} theme={theme} />
             ) : item.key === "iconInset" ? (
               <Text color={index === mode.field ? "cyan" : undefined}>{mode.values.iconInset ? "[x]" : "[ ]"}</Text>
+            ) : item.key === "icon" && !mode.values.icon ? (
+              <Text color="gray">{fit(ICON_PLACEHOLDER, valueWidth)}</Text>
             ) : (
               <Text>{fit(String(mode.values[item.key]) || "-", valueWidth)}</Text>
             )}
