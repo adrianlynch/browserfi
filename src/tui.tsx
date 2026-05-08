@@ -7,13 +7,15 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Box, Text, render, useApp, useInput, useWindowSize } from "ink";
 import TextInput from "ink-text-input";
 import { parse as parseToml } from "smol-toml";
-import type { BuildProgress, BundleConfig, Config, IconInset, LoadedConfig, ResolvedBundle } from "./cli.js";
+import type { AppType, BuildProgress, BundleConfig, Config, IconInset, LoadedConfig, ResolvedBundle } from "./cli.js";
 
 const browserNames = ["chromium", "chrome", "chrome-canary", "brave", "edge", "firefox"];
+const chromeFamilyBrowsers = ["chromium", "chrome", "chrome-canary", "brave", "edge"];
 const spinnerFrames = ["*", "+", "-", "+"];
 const buildSteps = ["preparing", "copying app", "configuring bundle", "applying icon", "updating attributes", "signing", "creating profile"];
 const BUILD_STEP_WIDTH = Math.max(...buildSteps.map((step) => step.length));
 const iconInsetOptions: IconInset[] = ["none", "small", "medium", "large"];
+const appTypeOptions: AppType[] = ["browser", "app"];
 const iconColors = [
   "",
   "#EF4444",
@@ -84,7 +86,7 @@ type Mode =
       fields: EditField[];
       browserOptions: string[];
       workspaceOptions: string[];
-      picker?: "browser" | "workspace" | "iconColor" | "iconBackgroundColor" | "iconInset";
+      picker?: "browser" | "workspace" | "iconColor" | "iconBackgroundColor" | "iconInset" | "appType";
       editing?: { field: TextInputField; value: string };
     }
   | { type: "confirm"; message: string; run: () => string };
@@ -97,11 +99,13 @@ type EditValues = {
   iconColor: string;
   iconBackgroundColor: string;
   iconInset: IconInset;
+  defaultUrl: string;
+  appType: AppType;
   workspace: string;
 };
 
 type EditField = { key: keyof EditValues; label: string };
-type TextInputField = "displayName" | "icon" | "iconColor" | "iconBackgroundColor";
+type TextInputField = "displayName" | "icon" | "iconColor" | "iconBackgroundColor" | "defaultUrl";
 
 type TuiTheme = {
   isDark: boolean;
@@ -112,6 +116,7 @@ type TuiTheme = {
 const baseFields: EditField[] = [
   { key: "browser", label: "browser" },
   { key: "displayName", label: "display name" },
+  { key: "defaultUrl", label: "default url" },
   { key: "icon", label: "icon" },
   { key: "iconColor", label: "icon color" },
   { key: "iconBackgroundColor", label: "icon background" },
@@ -143,7 +148,6 @@ function BrowserfiTui({ options, onDone, onError, onRefresh }: { options: TuiOpt
 
   const bundles = useMemo(() => options.resolveBundles(loaded.config, loaded.baseDir, loaded.path), [loaded, options]);
   const selectedBundle = bundles[Math.min(selected, Math.max(0, bundles.length - 1))];
-  const fields = editFields(aerospaceInfo);
   const browserOptions = installedBrowsers(loaded.config.bundles);
   const needsBuild = mode.type === "table" && selectedBundle ? options.bundleNeedsBuild(selectedBundle) : false;
   const needsSave = mode.type === "edit" && editNeedsSave(mode);
@@ -173,6 +177,22 @@ function BrowserfiTui({ options, onDone, onError, onRefresh }: { options: TuiOpt
     return () => clearInterval(timer);
   }, [buildProgress]);
 
+  useEffect(() => {
+    if (mode.type !== "edit") return;
+    const nextFields = editFields(aerospaceInfo, mode.values);
+    const nextKeys = nextFields.map((field) => field.key).join(",");
+    const currentKeys = mode.fields.map((field) => field.key).join(",");
+    if (nextKeys === currentKeys) return;
+    const currentField = mode.fields[mode.field]?.key;
+    const nextField = nextFields.findIndex((field) => field.key === currentField);
+    setMode({
+      ...mode,
+      fields: nextFields,
+      field: nextField === -1 ? Math.min(mode.field, nextFields.length - 1) : nextField,
+      picker: mode.picker && nextFields.some((field) => field.key === mode.picker) ? mode.picker : undefined,
+    });
+  }, [aerospaceInfo, mode]);
+
   useInput((input, key) => {
     try {
       if (isRefreshInput(input, key)) {
@@ -200,7 +220,7 @@ function BrowserfiTui({ options, onDone, onError, onRefresh }: { options: TuiOpt
           if (key.escape) {
             setMode({ ...mode, editing: undefined });
           } else if (key.return) {
-            setMode({ ...mode, values: { ...mode.values, [mode.editing.field]: mode.editing.value }, editing: undefined });
+            setMode({ ...mode, values: normalizeEditValues({ ...mode.values, [mode.editing.field]: mode.editing.value }), editing: undefined });
           }
           return;
         }
@@ -214,7 +234,7 @@ function BrowserfiTui({ options, onDone, onError, onRefresh }: { options: TuiOpt
           setMode(mode.picker ? { ...mode, picker: undefined } : { type: "table" });
         } else if (mode.picker === "browser" && (key.upArrow || key.downArrow || input === "j" || input === "k")) {
           const direction = key.upArrow || input === "k" ? -1 : 1;
-          setMode({ ...mode, values: { ...mode.values, browser: nextOption(mode.browserOptions, mode.values.browser, direction) } });
+          setMode({ ...mode, values: normalizeEditValues({ ...mode.values, browser: nextOption(mode.browserOptions, mode.values.browser, direction) }) });
         } else if (mode.picker === "workspace" && (key.upArrow || key.downArrow || input === "j" || input === "k")) {
           const direction = key.upArrow || input === "k" ? -1 : 1;
           setMode({ ...mode, values: { ...mode.values, workspace: nextOption(aerospaceInfo.workspaces, mode.values.workspace, direction) } });
@@ -227,6 +247,9 @@ function BrowserfiTui({ options, onDone, onError, onRefresh }: { options: TuiOpt
         } else if (mode.picker === "iconInset" && (key.upArrow || key.downArrow || input === "j" || input === "k")) {
           const direction = key.upArrow || input === "k" ? -1 : 1;
           setMode({ ...mode, values: { ...mode.values, iconInset: nextOption(iconInsetOptions, mode.values.iconInset, direction) } });
+        } else if (mode.picker === "appType" && (key.upArrow || key.downArrow || input === "j" || input === "k")) {
+          const direction = key.upArrow || input === "k" ? -1 : 1;
+          setMode({ ...mode, values: { ...mode.values, appType: nextOption(appTypeOptions, mode.values.appType, direction) } });
         } else if ((mode.picker === "iconColor" || mode.picker === "iconBackgroundColor") && key.return && mode.values[mode.picker] === CUSTOM_COLOR_OPTION) {
           setMode({ ...mode, picker: undefined, editing: { field: mode.picker, value: "#" } });
         } else if (mode.picker && key.return) {
@@ -241,6 +264,8 @@ function BrowserfiTui({ options, onDone, onError, onRefresh }: { options: TuiOpt
           setMode({ ...mode, picker: "workspace" });
         } else if (key.return && currentField === "displayName") {
           setMode({ ...mode, editing: { field: "displayName", value: mode.values.displayName } });
+        } else if (key.return && currentField === "defaultUrl") {
+          setMode({ ...mode, editing: { field: "defaultUrl", value: mode.values.defaultUrl } });
         } else if (key.return && currentField === "icon") {
           setMode({ ...mode, editing: { field: "icon", value: mode.values.icon } });
         } else if (key.return && currentField === "iconColor" && isCustomColorValue(mode.values.iconColor)) {
@@ -253,6 +278,8 @@ function BrowserfiTui({ options, onDone, onError, onRefresh }: { options: TuiOpt
           setMode({ ...mode, picker: "iconBackgroundColor" });
         } else if (key.return && currentField === "iconInset") {
           setMode({ ...mode, picker: "iconInset" });
+        } else if (key.return && currentField === "appType") {
+          setMode({ ...mode, picker: "appType" });
         } else if (input === "s") {
           saveCurrentEdit();
         }
@@ -267,10 +294,10 @@ function BrowserfiTui({ options, onDone, onError, onRefresh }: { options: TuiOpt
         setSelected((value: number) => Math.min(bundles.length - 1, value + 1));
       } else if ((input === "e" || key.return) && selectedBundle) {
         const values = editValues(selectedBundle, aerospaceInfo);
-        setMode({ type: "edit", originalKey: selectedBundle.key, initialValues: values, values, field: 0, fields, browserOptions: browserOptionsForEdit(browserOptions, selectedBundle.browser), workspaceOptions: aerospaceInfo.workspaces });
+        setMode({ type: "edit", originalKey: selectedBundle.key, initialValues: values, values, field: 0, fields: editFields(aerospaceInfo, values), browserOptions: browserOptionsForEdit(browserOptions, selectedBundle.browser), workspaceOptions: aerospaceInfo.workspaces });
       } else if (input === "a") {
         const values = newAppValues(aerospaceInfo, browserOptions);
-        setMode({ type: "edit", initialValues: values, values, field: 0, fields, browserOptions, workspaceOptions: aerospaceInfo.workspaces });
+        setMode({ type: "edit", initialValues: values, values, field: 0, fields: editFields(aerospaceInfo, values), browserOptions, workspaceOptions: aerospaceInfo.workspaces });
       } else if (input === "b" && selectedBundle) {
         const bundle = selectedBundle;
         setBuildProgress({ name: bundle.displayName, step: "Preparing", current: 0, total: 7 });
@@ -420,6 +447,8 @@ function Table({ bundles, selected, showWorkspace, bundleNeedsBuild, theme }: { 
         <Box flexDirection="column" marginTop={1}>
           <DetailLine label="name" value={selectedBundle.displayName} theme={theme} />
           <DetailLine label="profile" value={displayPath(selectedBundle.profileDir)} theme={theme} />
+          <DetailLine label="default url" value={selectedBundle.defaultUrl ?? "none"} theme={theme} />
+          {selectedBundle.defaultUrl && isChromeFamilyBrowser(selectedBundle.browser) && <DetailLine label="app type" value={selectedBundle.appType} theme={theme} />}
           <DetailLine label="icon" value={displayPath(selectedBundle.icon ?? "icons/<key>.png|icns")} theme={theme} />
           <DetailLine label="icon color" value={selectedBundle.iconColor ?? "-"} colorValue={selectedBundle.iconColor} theme={theme} />
           <DetailLine label="icon background" value={selectedBundle.iconBackgroundColor ?? "-"} colorValue={selectedBundle.iconBackgroundColor} theme={theme} />
@@ -488,6 +517,8 @@ function EditForm({ mode, setMode, theme }: { mode: Extract<Mode, { type: "edit"
               <Text color="cyan">{mode.values.workspace || "-"} {mode.picker === "workspace" ? "" : "(enter to choose)"}</Text>
             ) : index === mode.field && item.key === "displayName" ? (
               <Text color="cyan">{editablePreview(mode.values.displayName || "-", valueWidth)}</Text>
+            ) : index === mode.field && item.key === "defaultUrl" ? (
+              <Text color={mode.values.defaultUrl ? "cyan" : "gray"}>{editablePreview(mode.values.defaultUrl || "none", valueWidth)}</Text>
             ) : index === mode.field && item.key === "icon" && !mode.values.icon ? (
               <Text color="gray">{editablePreview(ICON_PLACEHOLDER, valueWidth)}</Text>
             ) : index === mode.field && item.key === "icon" ? (
@@ -502,6 +533,8 @@ function EditForm({ mode, setMode, theme }: { mode: Extract<Mode, { type: "edit"
               <ColorValue value={mode.values.iconBackgroundColor} active suffix={mode.picker === "iconBackgroundColor" ? "" : " (enter to choose)"} theme={theme} />
             ) : index === mode.field && item.key === "iconInset" ? (
               <Text color="cyan">{mode.values.iconInset} {mode.picker === "iconInset" ? "" : "(enter to choose)"}</Text>
+            ) : index === mode.field && item.key === "appType" ? (
+              <Text color="cyan">{mode.values.appType} {mode.picker === "appType" ? "" : "(enter to choose)"}</Text>
             ) : item.key === "iconColor" || item.key === "iconBackgroundColor" ? (
               <ColorValue value={mode.values[item.key]} theme={theme} />
             ) : item.key === "icon" && !mode.values.icon ? (
@@ -509,7 +542,7 @@ function EditForm({ mode, setMode, theme }: { mode: Extract<Mode, { type: "edit"
             ) : item.key === "icon" ? (
               <Text>{fit(displayPath(mode.values.icon), valueWidth)}</Text>
             ) : (
-              <Text>{fit(String(mode.values[item.key]) || "-", valueWidth)}</Text>
+              <Text>{fit(String(mode.values[item.key]) || (item.key === "defaultUrl" ? "none" : "-"), valueWidth)}</Text>
             )}
           </Box>
         ))}
@@ -546,6 +579,16 @@ function EditForm({ mode, setMode, theme }: { mode: Extract<Mode, { type: "edit"
             <Text key={option} color={option === mode.values.iconInset ? "cyan" : "gray"}>
               {option === mode.values.iconInset ? "› " : "  "}
               {option}
+            </Text>
+          ))}
+        </Box>
+      )}
+      {mode.picker === "appType" && (
+        <Box flexDirection="column" marginTop={1}>
+          {appTypeOptions.map((option) => (
+            <Text key={option} color={option === mode.values.appType ? "cyan" : "gray"}>
+              {option === mode.values.appType ? "› " : "  "}
+              {option} - {option === "browser" ? "address bar and tabs enabled" : "address bar and tabs disabled"}
             </Text>
           ))}
         </Box>
@@ -806,8 +849,17 @@ function isUrl(value: string): boolean {
   }
 }
 
-function editFields(aerospaceInfo: AerospaceInfo): EditField[] {
-  return aerospaceInfo.configPath ? [...baseFields, { key: "workspace", label: "aerospace workspace" }] : baseFields;
+function editFields(aerospaceInfo: AerospaceInfo, values: EditValues): EditField[] {
+  const fields = values.defaultUrl.trim() && isChromeFamilyBrowser(values.browser)
+    ? insertAfter(baseFields, "defaultUrl", { key: "appType", label: "app type" })
+    : baseFields;
+  return aerospaceInfo.configPath ? [...fields, { key: "workspace", label: "aerospace workspace" }] : fields;
+}
+
+function insertAfter(fields: EditField[], key: keyof EditValues, field: EditField): EditField[] {
+  const index = fields.findIndex((item) => item.key === key);
+  if (index === -1) return [...fields, field];
+  return [...fields.slice(0, index + 1), field, ...fields.slice(index + 1)];
 }
 
 function editValues(bundle: ResolvedBundle, aerospaceInfo: AerospaceInfo): EditValues {
@@ -819,6 +871,8 @@ function editValues(bundle: ResolvedBundle, aerospaceInfo: AerospaceInfo): EditV
     iconColor: bundle.iconColor ?? "",
     iconBackgroundColor: bundle.iconBackgroundColor ?? "",
     iconInset: bundle.iconInset,
+    defaultUrl: bundle.defaultUrl ?? "",
+    appType: bundle.appType,
     workspace: bundle.workspace ?? aerospaceInfo.workspaces[0] ?? "",
   };
 }
@@ -832,6 +886,8 @@ function newAppValues(aerospaceInfo: AerospaceInfo, browserOptions: string[]): E
     iconColor: "",
     iconBackgroundColor: "",
     iconInset: "none",
+    defaultUrl: "",
+    appType: "browser",
     workspace: aerospaceInfo.workspaces[0] ?? "",
   };
 }
@@ -840,7 +896,12 @@ function saveEdit(options: TuiOptions, loaded: LoadedConfig, originalKey: string
   if (!browserNames.includes(values.browser)) throw new Error(`unsupported browser: ${values.browser}`);
   if (workspaceOptions.length > 0 && !workspaceOptions.includes(values.workspace)) throw new Error(`unknown AeroSpace workspace: ${values.workspace}`);
   const displayName = values.displayName.trim();
+  const defaultUrl = values.defaultUrl.trim();
   if (!displayName) throw new Error("Display name must not be empty.");
+  if (defaultUrl && !isUrl(defaultUrl)) throw new Error("Default url must be an http or https URL.");
+  if (values.appType === "app" && (!defaultUrl || !isChromeFamilyBrowser(values.browser))) {
+    throw new Error("App type requires a default url and a Chrome-family browser.");
+  }
   const key = originalKey ?? uniqueKeyFromDisplayName(displayName, loaded.config);
   const duplicate = loaded.config.bundles.some((bundle) => bundle.key === key && bundle.key !== originalKey);
   if (duplicate) throw new Error(`bundle already exists: ${key}`);
@@ -853,6 +914,8 @@ function saveEdit(options: TuiOptions, loaded: LoadedConfig, originalKey: string
     iconColor: values.iconColor || undefined,
     iconBackgroundColor: values.iconBackgroundColor || undefined,
     iconInset: values.iconInset === "none" ? undefined : values.iconInset,
+    defaultUrl: defaultUrl || undefined,
+    appType: defaultUrl && isChromeFamilyBrowser(values.browser) && values.appType === "app" ? "app" : undefined,
     workspace: values.workspace || undefined,
   };
 
@@ -867,6 +930,11 @@ function saveEdit(options: TuiOptions, loaded: LoadedConfig, originalKey: string
   }
 
   options.writeConfig(loaded.path, loaded.config);
+}
+
+function normalizeEditValues(values: EditValues): EditValues {
+  if (!values.defaultUrl.trim() || !isChromeFamilyBrowser(values.browser)) return { ...values, appType: "browser" };
+  return values;
 }
 
 function installedBrowsers(entries: BundleConfig[]): string[] {
@@ -995,6 +1063,10 @@ function previewableColor(color: string, theme: TuiTheme): string {
 
 function isTerminalColor(color: string): boolean {
   return /^#[0-9A-Fa-f]{6}$/.test(color);
+}
+
+function isChromeFamilyBrowser(browserName: string): boolean {
+  return chromeFamilyBrowsers.includes(browserName);
 }
 
 function workspaceSort(a: string, b: string): number {

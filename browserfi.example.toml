@@ -6,6 +6,8 @@ iconsDir = "./icons"
 browser = "chromium"
 key = "my-project"
 displayName = "My Project"
+defaultUrl = "https://example.com"
+appType = "app"
 workspace = "4_Project"
 iconInset = "small"
 

@@ -9,6 +9,7 @@ import { runTui } from "./tui.js";
 
 export type BrowserName = "chromium" | "chrome" | "chrome-canary" | "brave" | "edge" | "firefox";
 export type IconInset = "none" | "small" | "medium" | "large";
+export type AppType = "browser" | "app";
 
 export type BundleConfig = {
   id?: string;
@@ -20,6 +21,8 @@ export type BundleConfig = {
   iconColor?: string;
   iconBackgroundColor?: string;
   iconInset?: boolean | IconInset;
+  defaultUrl?: string;
+  appType?: AppType;
   sourceApp?: string;
   installDir?: string;
   profilesDir?: string;
@@ -63,6 +66,8 @@ export type ResolvedBundle = {
   iconColor?: string;
   iconBackgroundColor?: string;
   iconInset: IconInset;
+  defaultUrl?: string;
+  appType: AppType;
   sourceApp: string;
   appName: string;
   appPath: string;
@@ -103,6 +108,8 @@ const BROWSERFI_ICON_PATH = "BrowserfiIconPath";
 const BROWSERFI_ICON_COLOR = "BrowserfiIconColor";
 const BROWSERFI_ICON_BACKGROUND_COLOR = "BrowserfiIconBackgroundColor";
 const BROWSERFI_ICON_INSET = "BrowserfiIconInset";
+
+const CHROME_FAMILY_BROWSERS: BrowserName[] = ["chromium", "chrome", "chrome-canary", "brave", "edge"];
 
 export const BROWSERS: Record<BrowserName, BrowserDefinition> = {
   chromium: {
@@ -398,6 +405,8 @@ function toListItem(bundle: ResolvedBundle): Record<string, string | undefined> 
     iconColor: bundle.iconColor,
     iconBackgroundColor: bundle.iconBackgroundColor,
     iconInset: bundle.iconInset,
+    defaultUrl: bundle.defaultUrl,
+    appType: bundle.appType,
     appPath: bundle.appPath,
     profileDir: bundle.profileDir,
     bundleId: bundle.bundleId,
@@ -427,12 +436,14 @@ function printWideTable(bundles: ResolvedBundle[]): void {
     bundle.iconColor ?? "",
     bundle.iconBackgroundColor ?? "",
     bundle.iconInset,
+    bundle.defaultUrl ?? "",
+    bundle.defaultUrl && isChromeFamilyBrowser(bundle.browser) ? bundle.appType : "",
     bundle.workspace ?? "",
     bundle.bundleId,
     bundle.appPath,
     bundle.profileDir,
   ]);
-  const headers = ["ID", "Key", "Browser", "Name", "Icon", "Icon Color", "Icon Background", "Icon Inset", "Workspace", "Bundle ID", "App Path", "Profile Path"];
+  const headers = ["ID", "Key", "Browser", "Name", "Icon", "Icon Color", "Icon Background", "Icon Inset", "Default URL", "App Type", "Workspace", "Bundle ID", "App Path", "Profile Path"];
   printRows(headers, rows);
 }
 
@@ -547,6 +558,8 @@ function resolveBundle(config: Config, entry: BundleConfig, baseDir: string, con
   const iconColor = entry.iconColor?.trim();
   const iconBackgroundColor = entry.iconBackgroundColor?.trim();
   const iconInset = resolveIconInset(entry.iconInset);
+  const defaultUrl = entry.defaultUrl?.trim();
+  const appType = resolveAppType(entry.appType);
 
   if (!existsSync(sourceApp)) {
     throw new Error(`source app not found at ${sourceApp}`);
@@ -559,6 +572,12 @@ function resolveBundle(config: Config, entry: BundleConfig, baseDir: string, con
   }
   if (iconBackgroundColor && !HEX_COLOR_PATTERN.test(iconBackgroundColor)) {
     throw new Error(`invalid iconBackgroundColor "${iconBackgroundColor}". Use a 6-digit hex color like #111111.`);
+  }
+  if (defaultUrl && !isHttpUrl(defaultUrl)) {
+    throw new Error(`invalid defaultUrl "${defaultUrl}". Use an http or https URL.`);
+  }
+  if (appType === "app" && (!defaultUrl || !isChromeFamilyBrowser(browserName))) {
+    throw new Error("appType = \"app\" requires defaultUrl and a Chrome-family browser.");
   }
 
   return {
@@ -574,15 +593,33 @@ function resolveBundle(config: Config, entry: BundleConfig, baseDir: string, con
     iconColor,
     iconBackgroundColor,
     iconInset,
+    defaultUrl,
+    appType,
     sourceApp,
     appName,
     appPath: join(installDir, `${appName}.app`),
     bundleId: `${bundleIdPrefix}-${id}`,
     profileDir,
     executableName,
-    profileArgs: browser.profileArgs(profileDir),
+    profileArgs: launchArgs(browserName, browser.profileArgs(profileDir), defaultUrl, appType),
     iconsDir,
   };
+}
+
+function resolveAppType(value: BundleConfig["appType"]): AppType {
+  if (value === undefined) return "browser";
+  if (value === "browser" || value === "app") return value;
+  throw new Error(`invalid appType "${value}". Use browser or app.`);
+}
+
+function launchArgs(browserName: BrowserName, profileArgs: string[], defaultUrl: string | undefined, appType: AppType): string[] {
+  if (!defaultUrl) return profileArgs;
+  if (appType === "app" && isChromeFamilyBrowser(browserName)) return [...profileArgs, `--app=${defaultUrl}`];
+  return [...profileArgs, defaultUrl];
+}
+
+function isChromeFamilyBrowser(browserName: string): boolean {
+  return CHROME_FAMILY_BROWSERS.includes(browserName as BrowserName);
 }
 
 function resolveIconInset(value: BundleConfig["iconInset"]): IconInset {

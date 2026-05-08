@@ -164,6 +164,8 @@ iconsDir = "./icons"
 browser = "chromium"
 key = "user-console-monorepo"
 displayName = "User Console Monorepo"
+defaultUrl = "https://example.com"
+appType = "browser"
 workspace = "6_User_Console"
 ```
 
@@ -173,6 +175,8 @@ Each bundle supports:
 - `key`: stable identifier used for profiles and icons
 - `id`: optional stable app identity; defaults to `key`
 - `displayName`: Finder, Dock, and menu bar name; also used for the `.app` filename
+- `defaultUrl`: optional `http` or `https` URL opened when the app starts
+- `appType`: optional Chrome-family launch type when `defaultUrl` is set: `browser` keeps the address bar and tabs, `app` hides them
 - `icon`: optional `.svg`, `.png`, `.jpg`, `.jpeg`, or `.icns` path or URL for this app
 - `iconColor`: optional SVG tint color, as a 6-digit hex value like `#34CDD7`
 - `iconBackgroundColor`: optional SVG background color, as a 6-digit hex value like `#111111`
@@ -184,6 +188,10 @@ Each bundle supports:
 
 Keys and ids may contain only letters, numbers, dots, underscores, and hyphens.
 Display names must not be empty or contain `/`.
+
+`defaultUrl` works for every supported browser. `appType = "app"` is only
+supported for Chrome-family browsers: Chromium, Chrome, Chrome Canary, Brave, and
+Edge. Firefox always opens the URL in normal browser mode.
 
 Generated apps are written as `<displayName>.app`. Browserfi marks generated
 bundles in `Info.plist` with ownership metadata. If a target app name already
