@@ -625,13 +625,13 @@ function Footer({ mode, hasAerospace, needsSave, needsBuild, buildProgress, spin
   return (
     <Box flexDirection="column" marginTop={1}>
       {buildProgress ? (
-        <BuildProgress progress={buildProgress} spinner={spinner} />
+        <BuildProgressStatus progress={buildProgress} spinner={spinner} />
       ) : needsBuild ? (
         <Text bold color="#FFA500">Some apps need to be built (b) to build</Text>
       ) : (
         <Text bold={Boolean(notice)} color={notice ? "green" : undefined}>{notice || " "}</Text>
       )}
-      <Text color="gray">{rule}</Text>
+      {buildProgress ? <BuildProgressRule progress={buildProgress} width={rule.length} /> : <Text color="gray">{rule}</Text>}
       <Text color="gray">
         {"↑/↓ select • a add app • enter/e edit • "}
         <Text bold={needsBuild || Boolean(buildProgress)} color={needsBuild || buildProgress ? "#FFA500" : "gray"}>{buildProgress ? "building" : "b build"}</Text>
@@ -641,28 +641,34 @@ function Footer({ mode, hasAerospace, needsSave, needsBuild, buildProgress, spin
   );
 }
 
-function BuildProgress({ progress, spinner }: { progress: BuildProgress & { name: string }; spinner: string }) {
+function BuildProgressStatus({ progress, spinner }: { progress: BuildProgress & { name: string }; spinner: string }) {
   const { columns } = useWindowSize();
   const percent = progress.total > 0 ? Math.round((progress.current / progress.total) * 100) : 0;
   const terminalWidth = columns || 80;
   const leftLabel = `${spinner} ${progress.step.padEnd(BUILD_STEP_WIDTH)}`;
-  const minBarWidth = 12;
-  const maxRightWidth = Math.max(8, terminalWidth - leftLabel.length - minBarWidth - 2);
-  const rightWidth = Math.min(32, maxRightWidth);
+  const rightWidth = Math.min(32, Math.max(8, terminalWidth - leftLabel.length - 1));
   const name = fit(progress.name, Math.max(0, rightWidth - 6));
   const rightLabel = `${String(percent).padStart(3)}%  ${name}`.padStart(rightWidth);
-  const width = Math.max(1, terminalWidth - leftLabel.length - rightWidth - 2);
+  const spacer = " ".repeat(Math.max(1, terminalWidth - leftLabel.length - rightLabel.length));
+  return (
+    <Text color="#FFA500">
+      {leftLabel}
+      {spacer}
+      {rightLabel}
+    </Text>
+  );
+}
+
+function BuildProgressRule({ progress, width }: { progress: BuildProgress; width: number }) {
   const ratio = progress.total > 0 ? progress.current / progress.total : 0;
   const marker = ratio > 0 && ratio < 1 ? 1 : 0;
   const filled = Math.max(0, Math.min(width - marker, Math.floor(ratio * width)));
   const empty = Math.max(0, width - filled - marker);
   return (
-    <Text color="#FFA500">
-      {leftLabel}{" "}
-      <Text bold>{"━".repeat(filled)}</Text>
-      {marker ? <Text bold>╸</Text> : null}
+    <Text>
+      <Text bold color="#FFA500">{"━".repeat(filled)}</Text>
+      {marker ? <Text bold color="#FFA500">╸</Text> : null}
       <Text color="gray">{"─".repeat(empty)}</Text>
-      {" "}{rightLabel}
     </Text>
   );
 }
