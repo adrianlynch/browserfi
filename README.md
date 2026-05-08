@@ -64,7 +64,7 @@ brew install adrianlynch/tap/browserfi
 ## Quick Start
 
 1. Edit [.browserfi.toml](.browserfi.toml).
-2. Drop optional per-bundle icons into `icons/<key>.png` or `icons/<key>.icns`.
+2. Drop optional per-bundle icons into `icons/<key>.png|jpg|jpeg|icns`.
 3. Run the interactive UI:
 
 ```bash
@@ -103,8 +103,8 @@ The browser field is selected from supported browsers that are installed on the
 machine. In the edit form, use `↑/↓` to move between fields and `enter` to open
 browser/workspace selectors. Press `s` to save. New apps get a filesystem-safe
 `key` generated from the display name; existing apps keep their current key when
-renamed. The icon field accepts a `.svg`, `.png`, or `.icns` path or URL; leave
-it blank to use the `icons/<key>.png|icns` convention. The icon color pickers
+renamed. The icon field accepts a `.svg`, `.png`, `.jpg`, `.jpeg`, or `.icns`
+path or URL; leave it blank to use the `icons/<key>.png|jpg|jpeg|icns` convention. The icon color pickers
 set `iconColor` and `iconBackgroundColor`, which customize SVG icons during
 build. If AeroSpace config is found, Browserfi shows workspace fields and lets
 you choose from existing AeroSpace workspace names. If AeroSpace is not found,
@@ -173,10 +173,10 @@ Each bundle supports:
 - `key`: stable identifier used for profiles and icons
 - `id`: optional stable app identity; defaults to `key`
 - `displayName`: Finder, Dock, and menu bar name; also used for the `.app` filename
-- `icon`: optional `.svg`, `.png`, or `.icns` path or URL for this app
+- `icon`: optional `.svg`, `.png`, `.jpg`, `.jpeg`, or `.icns` path or URL for this app
 - `iconColor`: optional SVG tint color, as a 6-digit hex value like `#34CDD7`
 - `iconBackgroundColor`: optional SVG background color, as a 6-digit hex value like `#111111`
-- `iconInset`: optional SVG artwork inset toggle; defaults to `true`
+- `iconInset`: optional SVG/PNG/JPG artwork inset toggle; defaults to `true`
 - `workspace`: optional AeroSpace workspace for printed rules
 - `sourceApp`: optional override for the source `.app`
 - `installDir`, `profilesDir`, `iconsDir`: optional per-bundle path overrides
@@ -193,7 +193,7 @@ Google Chrome, are rejected until the existing app is deleted manually.
 
 ## Custom Icons
 
-Set `icon` on a bundle to use a specific SVG, PNG, or ICNS file. Local paths and
+Set `icon` on a bundle to use a specific SVG, PNG, JPG, or ICNS file. Local paths and
 `http(s)` URLs are supported:
 
 ```toml
@@ -215,25 +215,27 @@ iconBackgroundColor = "#111111"
 iconInset = true
 ```
 
-If `icon` is not set, Browserfi looks for a square PNG, ideally `1024x1024`,
+If `icon` is not set, Browserfi looks for a square PNG or JPG, ideally `1024x1024`,
 or a pre-built `.icns` in `icons/`, named after the bundle key:
 
 ```text
 icons/<key>.png
+icons/<key>.jpg
+icons/<key>.jpeg
 icons/<key>.icns
 ```
 
 `browserfi build` picks icons up by explicit path, URL, or convention. It
-downloads URL icons during build, converts SVG and PNG files to ICNS, replaces
+downloads URL icons during build, converts SVG, PNG, and JPG files to ICNS, replaces
 `Contents/Resources/app.icns`, deletes `CFBundleIconName` from `Info.plist`,
 re-signs ad-hoc, and refreshes Launch Services.
 
-SVG icons are normalized onto a `1024x1024` canvas before conversion. Browserfi
-preserves the SVG `viewBox`, insets the artwork slightly so it does not touch
-the macOS icon edges, optionally tints non-`none` fills and strokes with
-`iconColor`, and optionally paints `iconBackgroundColor` behind the artwork.
-Set `iconInset = false` if the SVG already includes the padding you want.
-PNG and ICNS icons are used as supplied.
+Image icons are normalized onto a `1024x1024` canvas before conversion. Browserfi
+preserves SVG `viewBox` values, insets SVG/PNG/JPG artwork slightly so it does
+not touch the macOS icon edges, optionally tints SVG non-`none` fills and strokes
+with `iconColor`, and optionally paints `iconBackgroundColor` behind SVG artwork.
+Set `iconInset = false` if the icon already includes the padding you want.
+ICNS icons are used as supplied.
 
 The legacy helper [build-icon.sh](build-icon.sh) can still build a simple
 macOS-style PNG from an SVG:

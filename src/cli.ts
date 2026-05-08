@@ -805,8 +805,13 @@ function applyIcon(bundle: ResolvedBundle): boolean {
       return true;
     }
 
-    if (lowerIconPath.endsWith(".png")) {
-      pngToIcns(resolved.path, dest);
+    if (isRasterIconPath(lowerIconPath)) {
+      const raster = prepareRasterIcon(resolved.path, bundle.iconInset);
+      try {
+        pngToIcns(raster.path, dest);
+      } finally {
+        raster.cleanup?.();
+      }
       return true;
     }
 
@@ -825,7 +830,7 @@ function applyIcon(bundle: ResolvedBundle): boolean {
       return true;
     }
 
-    throw new Error(`unsupported icon type: ${resolved.source}. Use .svg, .png, or .icns.`);
+    throw new Error(`unsupported icon type: ${resolved.source}. Use .svg, .png, .jpg, .jpeg, or .icns.`);
   } finally {
     resolved.cleanup?.();
   }
@@ -847,6 +852,12 @@ function resolveIconFile(bundle: ResolvedBundle): ResolvedIconFile | undefined {
   const png = join(bundle.iconsDir, `${bundle.key}.png`);
   if (existsSync(png)) return { path: png, source: png };
 
+  const jpg = join(bundle.iconsDir, `${bundle.key}.jpg`);
+  if (existsSync(jpg)) return { path: jpg, source: jpg };
+
+  const jpeg = join(bundle.iconsDir, `${bundle.key}.jpeg`);
+  if (existsSync(jpeg)) return { path: jpeg, source: jpeg };
+
   return undefined;
 }
 
@@ -859,6 +870,12 @@ function effectiveIconIdentity(bundle: ResolvedBundle): string | undefined {
 
   const png = join(bundle.iconsDir, `${bundle.key}.png`);
   if (existsSync(png)) return png;
+
+  const jpg = join(bundle.iconsDir, `${bundle.key}.jpg`);
+  if (existsSync(jpg)) return jpg;
+
+  const jpeg = join(bundle.iconsDir, `${bundle.key}.jpeg`);
+  if (existsSync(jpeg)) return jpeg;
 
   return undefined;
 }
@@ -876,10 +893,10 @@ function downloadIcon(url: string): ResolvedIconFile {
   }
 }
 
-function iconExtensionFromUrl(url: string): ".svg" | ".png" | ".icns" {
+function iconExtensionFromUrl(url: string): ".svg" | ".png" | ".jpg" | ".jpeg" | ".icns" {
   const extension = extname(new URL(url).pathname).toLowerCase();
-  if (extension === ".svg" || extension === ".png" || extension === ".icns") return extension;
-  throw new Error(`unsupported icon URL type: ${url}. Use a .svg, .png, or .icns URL.`);
+  if (extension === ".svg" || extension === ".png" || extension === ".jpg" || extension === ".jpeg" || extension === ".icns") return extension;
+  throw new Error(`unsupported icon URL type: ${url}. Use a .svg, .png, .jpg, .jpeg, or .icns URL.`);
 }
 
 function svgToPng(src: string): { path: string; cleanup: () => void } {
@@ -925,6 +942,31 @@ function prepareSvgIcon(src: string, color?: string, backgroundColor?: string, i
     .replace(`fill="none" data-browserfi-background="${SVG_BACKGROUND_PLACEHOLDER}"`, `fill="${backgroundColor ?? ""}"`);
   writeFileSync(dest, next);
   return { path: dest, cleanup: () => rmSync(work, { recursive: true, force: true }) };
+}
+
+function prepareRasterIcon(src: string, inset: boolean): { path: string; cleanup?: () => void } {
+  if (!inset) return { path: src };
+
+  const work = mkdtempSync(join(tmpdir(), "browserfi-raster-icon-"));
+  const size = 1024 - (SVG_ICON_PADDING * 2);
+  const resized = join(work, "resized.png");
+  const padded = join(work, "padded.png");
+
+  try {
+    run("sips", ["-Z", String(size), src, "--out", resized], { quiet: true });
+    run("sips", ["-p", "1024", "1024", resized, "--out", padded], { quiet: true });
+    return {
+      path: padded,
+      cleanup: () => rmSync(work, { recursive: true, force: true }),
+    };
+  } catch (error) {
+    rmSync(work, { recursive: true, force: true });
+    throw error;
+  }
+}
+
+function isRasterIconPath(path: string): boolean {
+  return path.endsWith(".png") || path.endsWith(".jpg") || path.endsWith(".jpeg");
 }
 
 function svgViewBox(svgAttrs: string): [number, number, number, number] | undefined {
