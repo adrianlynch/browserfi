@@ -1,7 +1,8 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import React, { useEffect, useMemo, useState } from "react";
 import { Box, Text, render, useApp, useInput, useWindowSize } from "ink";
 import TextInput from "ink-text-input";
@@ -17,6 +18,8 @@ const SELECTED_ROW_BACKGROUND_DARK = "#5A2438";
 const TABLE_PADDING_X = 2;
 const EDIT_PADDING_X = 2;
 const EDIT_LABEL_WIDTH = 22;
+const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
+const PACKAGE_VERSION = readPackageVersion();
 
 type TuiOptions = {
   configPath?: string;
@@ -305,11 +308,22 @@ function Header({ configPath, redrawToken }: { configPath: string; redrawToken: 
     <Box flexDirection="column" marginBottom={1}>
       <Text>
         <Text bold color="magenta">Browserfi</Text>
-        <Text> - create and manage custom bundled browsers</Text>
+        <Text color="#777777"> {PACKAGE_VERSION}</Text>
       </Text>
+      <Text>create and manage custom bundled browsers</Text>
       <Text color="gray">Config: {configPath}{redrawToken % 2 === 0 ? "" : " "}</Text>
     </Box>
   );
+}
+
+function readPackageVersion(): string {
+  try {
+    const packagePath = resolve(SCRIPT_DIR, "../package.json");
+    const pkg = JSON.parse(readFileSync(packagePath, "utf8")) as { version?: string };
+    return pkg.version ?? "0.0.0";
+  } catch {
+    return "0.0.0";
+  }
 }
 
 function Table({ bundles, selected, showWorkspace, bundleNeedsBuild, theme }: { bundles: ResolvedBundle[]; selected: number; showWorkspace: boolean; bundleNeedsBuild: (bundle: ResolvedBundle) => boolean; theme: TuiTheme }) {
