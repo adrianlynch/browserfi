@@ -41,6 +41,7 @@ const SELECTED_ROW_BACKGROUND_DARK = "#5A2438";
 const TABLE_PADDING_X = 2;
 const EDIT_PADDING_X = 2;
 const EDIT_LABEL_WIDTH = 22;
+const LABEL_COLOR = "#777777";
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const PACKAGE_VERSION = readPackageVersion();
 
@@ -92,16 +93,15 @@ type EditField = { key: keyof EditValues; label: string };
 type TuiTheme = {
   isDark: boolean;
   selectedRowBackground: string;
-  detailLabelColor: string;
   detailValueColor: string;
 };
 
 const baseFields: EditField[] = [
-  { key: "browser", label: "Browser" },
-  { key: "displayName", label: "Display name" },
-  { key: "icon", label: "Icon" },
-  { key: "iconColor", label: "Icon color" },
-  { key: "iconBackgroundColor", label: "Icon background" },
+  { key: "browser", label: "browser" },
+  { key: "displayName", label: "display name" },
+  { key: "icon", label: "icon" },
+  { key: "iconColor", label: "icon color" },
+  { key: "iconBackgroundColor", label: "icon background" },
   { key: "iconInset", label: "indent icon" },
 ];
 
@@ -291,8 +291,7 @@ function currentTuiTheme(): TuiTheme {
   return {
     isDark,
     selectedRowBackground: isDark ? SELECTED_ROW_BACKGROUND_DARK : SELECTED_ROW_BACKGROUND_LIGHT,
-    detailLabelColor: isDark ? "#FFFFFF" : "#000000",
-    detailValueColor: isDark ? "#9A9A9A" : "#777777",
+    detailValueColor: isDark ? "#FFFFFF" : "#000000",
   };
 }
 
@@ -335,10 +334,13 @@ function Header({ configPath, redrawToken }: { configPath: string; redrawToken: 
     <Box flexDirection="column" marginBottom={1}>
       <Text>
         <Text bold color="magenta">Browserfi</Text>
-        <Text color="#777777"> v{PACKAGE_VERSION}</Text>
+        <Text color={LABEL_COLOR}> v{PACKAGE_VERSION}</Text>
       </Text>
       <Text>create and manage custom bundled browsers</Text>
-      <Text color="gray">Config: {configPath}{redrawToken % 2 === 0 ? "" : " "}</Text>
+      <Text>
+        <Text color={LABEL_COLOR}>config:</Text>
+        <Text color="gray"> {configPath}{redrawToken % 2 === 0 ? "" : " "}</Text>
+      </Text>
     </Box>
   );
 }
@@ -374,13 +376,13 @@ function Table({ bundles, selected, showWorkspace, bundleNeedsBuild, theme }: { 
       {bundles.length === 0 && <Text color="yellow">No bundles configured.</Text>}
       {selectedBundle && (
         <Box flexDirection="column" marginTop={1}>
-          <DetailLine label="Name" value={selectedBundle.displayName} theme={theme} />
-          <DetailLine label="Profile" value={selectedBundle.profileDir} theme={theme} />
-          <DetailLine label="Icon" value={selectedBundle.icon ?? "icons/<key>.png|icns"} theme={theme} />
-          <DetailLine label="Icon color" value={selectedBundle.iconColor ?? "-"} colorValue={selectedBundle.iconColor} theme={theme} />
-          <DetailLine label="Icon background" value={selectedBundle.iconBackgroundColor ?? "-"} colorValue={selectedBundle.iconBackgroundColor} theme={theme} />
+          <DetailLine label="name" value={selectedBundle.displayName} theme={theme} />
+          <DetailLine label="profile" value={selectedBundle.profileDir} theme={theme} />
+          <DetailLine label="icon" value={selectedBundle.icon ?? "icons/<key>.png|icns"} theme={theme} />
+          <DetailLine label="icon color" value={selectedBundle.iconColor ?? "-"} colorValue={selectedBundle.iconColor} theme={theme} />
+          <DetailLine label="icon background" value={selectedBundle.iconBackgroundColor ?? "-"} colorValue={selectedBundle.iconBackgroundColor} theme={theme} />
           <DetailLine label="indent icon" value={selectedBundle.iconInset ? "yes" : "no"} theme={theme} />
-          {showWorkspace && <DetailLine label="Workspace" value={selectedBundle.workspace ?? "-"} theme={theme} />}
+          {showWorkspace && <DetailLine label="workspace" value={selectedBundle.workspace ?? "-"} theme={theme} />}
         </Box>
       )}
     </Box>
@@ -391,7 +393,7 @@ function DetailLine({ label, value, colorValue, theme }: { label: string; value:
   return (
     <Text>
       {"   "}
-      <Text color={theme.detailValueColor}>{label}:</Text>
+      <Text color={LABEL_COLOR}>{label}:</Text>
       {" "}
       {colorValue && (
         <>
@@ -399,7 +401,7 @@ function DetailLine({ label, value, colorValue, theme }: { label: string; value:
           {" "}
         </>
       )}
-      <Text color={theme.detailLabelColor}>{value}</Text>
+      <Text color={theme.detailValueColor}>{value}</Text>
     </Text>
   );
 }
@@ -433,7 +435,7 @@ function EditForm({ mode, setMode, theme }: { mode: Extract<Mode, { type: "edit"
         {mode.fields.map((item, index) => (
           <Box key={item.key}>
             <Box width={EDIT_LABEL_WIDTH}>
-              <Text color={index === mode.field ? "cyan" : undefined}>{item.label}</Text>
+              <Text color={LABEL_COLOR}>{item.label}:</Text>
             </Box>
             {index === mode.field && item.key !== "workspace" && item.key !== "browser" && item.key !== "iconColor" && item.key !== "iconBackgroundColor" && item.key !== "iconInset" ? (
               <TextInput
@@ -630,7 +632,7 @@ function fit(value: string, width: number): string {
 }
 
 function editFields(aerospaceInfo: AerospaceInfo): EditField[] {
-  return aerospaceInfo.configPath ? [...baseFields, { key: "workspace", label: "AeroSpace workspace" }] : baseFields;
+  return aerospaceInfo.configPath ? [...baseFields, { key: "workspace", label: "aerospace workspace" }] : baseFields;
 }
 
 function editValues(bundle: ResolvedBundle, aerospaceInfo: AerospaceInfo): EditValues {
