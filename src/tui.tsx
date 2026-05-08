@@ -46,6 +46,7 @@ const ICON_PLACEHOLDER = "- url to svg, png or jpg -";
 const COLOR_PICKER_LABEL_WIDTH = 12;
 const COLOR_PREVIEW_SIZE = 3;
 const COLOR_PREVIEW_WIDTH = COLOR_PREVIEW_SIZE * 2;
+const COLOR_PREVIEW_INNER_WIDTH = COLOR_PREVIEW_WIDTH + 2;
 const COLOR_PREVIEW_HEIGHT = COLOR_PREVIEW_SIZE + 2;
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const PACKAGE_VERSION = readPackageVersion();
@@ -543,18 +544,18 @@ function PickerColor({ color, selected, theme }: { color: string; selected: bool
 
 function ColorPreviewRow({ color, previewOffset, theme }: { color: string; previewOffset?: number; theme: TuiTheme }) {
   const previewColor = color || (theme.isDark ? "#FFFFFF" : "#000000");
-  const emptyWidth = COLOR_PREVIEW_WIDTH + 2;
+  const emptyWidth = COLOR_PREVIEW_INNER_WIDTH + 2;
   if (previewOffset === undefined) {
     return <Text>{" ".repeat(emptyWidth)}</Text>;
   }
   if (previewOffset === 0) {
-    return <Text color={previewColor}>╭{"─".repeat(COLOR_PREVIEW_WIDTH)}╮</Text>;
+    return <Text color={previewColor}>╭{"─".repeat(COLOR_PREVIEW_INNER_WIDTH)}╮</Text>;
   }
   if (previewOffset === COLOR_PREVIEW_HEIGHT - 1) {
-    return <Text color={previewColor}>╰{"─".repeat(COLOR_PREVIEW_WIDTH)}╯</Text>;
+    return <Text color={previewColor}>╰{"─".repeat(COLOR_PREVIEW_INNER_WIDTH)}╯</Text>;
   }
   return (
-    <Text color={previewColor}>│<ColorBlock color={color} theme={theme} />│</Text>
+    <Text color={previewColor}>│ <ColorBlock color={color} theme={theme} /> │</Text>
   );
 }
 
