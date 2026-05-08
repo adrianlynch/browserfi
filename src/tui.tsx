@@ -79,7 +79,7 @@ const baseFields: EditField[] = [
   { key: "icon", label: "Icon" },
   { key: "iconColor", label: "Icon color" },
   { key: "iconBackgroundColor", label: "Icon background" },
-  { key: "iconInset", label: "Indent icon" },
+  { key: "iconInset", label: "indent icon" },
 ];
 
 export function runTui(options: TuiOptions): Promise<void> {
@@ -356,7 +356,7 @@ function Table({ bundles, selected, showWorkspace, bundleNeedsBuild, theme }: { 
           <DetailLine label="Icon" value={selectedBundle.icon ?? "icons/<key>.png|icns"} theme={theme} />
           <DetailLine label="Icon color" value={selectedBundle.iconColor ?? "-"} colorValue={selectedBundle.iconColor} theme={theme} />
           <DetailLine label="Icon background" value={selectedBundle.iconBackgroundColor ?? "-"} colorValue={selectedBundle.iconBackgroundColor} theme={theme} />
-          <DetailLine label="Indent icon" value={selectedBundle.iconInset ? "yes" : "no"} theme={theme} />
+          <DetailLine label="indent icon" value={selectedBundle.iconInset ? "yes" : "no"} theme={theme} />
           {showWorkspace && <DetailLine label="Workspace" value={selectedBundle.workspace ?? "-"} theme={theme} />}
         </Box>
       )}
@@ -428,7 +428,7 @@ function EditForm({ mode, setMode, theme }: { mode: Extract<Mode, { type: "edit"
             ) : item.key === "iconColor" || item.key === "iconBackgroundColor" ? (
               <ColorValue value={mode.values[item.key]} theme={theme} />
             ) : item.key === "iconInset" ? (
-              <Text color={index === mode.field ? "cyan" : undefined}>{mode.values.iconInset ? "☑" : "☐"} indent SVG artwork</Text>
+              <Text color={index === mode.field ? "cyan" : undefined}>{mode.values.iconInset ? "[x]" : "[ ]"}</Text>
             ) : (
               <Text>{fit(String(mode.values[item.key]) || "-", valueWidth)}</Text>
             )}
