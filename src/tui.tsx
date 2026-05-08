@@ -555,7 +555,7 @@ function ColorPreviewRow({ color, previewOffset, theme }: { color: string; previ
     return <Text color={previewColor}>╰{"─".repeat(COLOR_PREVIEW_INNER_WIDTH)}╯</Text>;
   }
   return (
-    <Text color={previewColor}>│ <ColorBlock color={color} theme={theme} /> │</Text>
+    <Text color={previewColor}>│▐<ColorBlock color={color} theme={theme} />▌│</Text>
   );
 }
 
