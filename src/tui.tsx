@@ -546,20 +546,20 @@ function PickerColor({ color, selected, theme }: { color: string; selected: bool
 function ColorPreviewRow({ color, previewOffset, showArrow, theme }: { color: string; previewOffset?: number; showArrow: boolean; theme: TuiTheme }) {
   const previewColor = color || (theme.isDark ? "#FFFFFF" : "#000000");
   const emptyWidth = COLOR_PREVIEW_INNER_WIDTH + 3;
-  const arrow = <Text color={LABEL_COLOR}>{showArrow ? "◀" : " "}</Text>;
+  const connector = <Text color={LABEL_COLOR}>{showArrow ? "─" : " "}</Text>;
   if (previewOffset === undefined) {
     return <Text>{" ".repeat(emptyWidth)}</Text>;
   }
   if (previewOffset === 0) {
-    return <Text>{arrow}<Text color={LABEL_COLOR}>╭{"─".repeat(COLOR_PREVIEW_INNER_WIDTH)}╮</Text></Text>;
+    return <Text>{connector}<Text color={LABEL_COLOR}>╭{"─".repeat(COLOR_PREVIEW_INNER_WIDTH)}╮</Text></Text>;
   }
   if (previewOffset === COLOR_PREVIEW_HEIGHT - 1) {
-    return <Text>{arrow}<Text color={LABEL_COLOR}>╰{"─".repeat(COLOR_PREVIEW_INNER_WIDTH)}╯</Text></Text>;
+    return <Text>{connector}<Text color={LABEL_COLOR}>╰{"─".repeat(COLOR_PREVIEW_INNER_WIDTH)}╯</Text></Text>;
   }
   return (
     <Text>
-      {arrow}
-      <Text color={LABEL_COLOR}>│</Text>
+      {connector}
+      <Text color={LABEL_COLOR}>{showArrow ? "┤" : "│"}</Text>
       <Text color={previewColor}>▐</Text>
       <ColorBlock color={color} theme={theme} />
       <Text color={previewColor}>▌</Text>
