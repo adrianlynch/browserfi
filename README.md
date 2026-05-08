@@ -235,7 +235,7 @@ preserves SVG `viewBox` values, optionally insets SVG/PNG/JPG artwork so it does
 not touch the macOS icon edges, optionally tints SVG non-`none` fills and strokes
 with `iconColor`, and optionally paints `iconBackgroundColor` behind SVG artwork.
 Set `iconInset` to `none`, `small`, `medium`, or `large`; these map to `0px`,
-`96px`, `192px`, and `288px` padding on each side of the `1024x1024` canvas.
+`96px`, `144px`, and `192px` padding on each side of the `1024x1024` canvas.
 ICNS icons are used as supplied.
 
 The legacy helper [build-icon.sh](build-icon.sh) can still build a simple

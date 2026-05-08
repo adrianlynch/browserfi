@@ -89,8 +89,8 @@ const SVG_BACKGROUND_PLACEHOLDER = "__BROWSERFI_ICON_BACKGROUND__";
 const ICON_INSET_PIXELS: Record<IconInset, number> = {
   none: 0,
   small: 96,
-  medium: 192,
-  large: 288,
+  medium: 144,
+  large: 192,
 };
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const AEROSPACE_BEGIN = "# BEGIN browserfi";
