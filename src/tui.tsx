@@ -347,7 +347,7 @@ function Header({ configPath, redrawToken }: { configPath: string; redrawToken: 
       <Text>create and manage custom bundled browsers</Text>
       <Text>
         <Text color={LABEL_COLOR}>config:</Text>
-        <Text color="gray"> {configPath}{redrawToken % 2 === 0 ? "" : " "}</Text>
+        <Text color="gray"> {displayPath(configPath)}{redrawToken % 2 === 0 ? "" : " "}</Text>
       </Text>
     </Box>
   );
@@ -385,8 +385,8 @@ function Table({ bundles, selected, showWorkspace, bundleNeedsBuild, theme }: { 
       {selectedBundle && (
         <Box flexDirection="column" marginTop={1}>
           <DetailLine label="name" value={selectedBundle.displayName} theme={theme} />
-          <DetailLine label="profile" value={selectedBundle.profileDir} theme={theme} />
-          <DetailLine label="icon" value={selectedBundle.icon ?? "icons/<key>.png|icns"} theme={theme} />
+          <DetailLine label="profile" value={displayPath(selectedBundle.profileDir)} theme={theme} />
+          <DetailLine label="icon" value={displayPath(selectedBundle.icon ?? "icons/<key>.png|icns")} theme={theme} />
           <DetailLine label="icon color" value={selectedBundle.iconColor ?? "-"} colorValue={selectedBundle.iconColor} theme={theme} />
           <DetailLine label="icon background" value={selectedBundle.iconBackgroundColor ?? "-"} colorValue={selectedBundle.iconBackgroundColor} theme={theme} />
           <DetailLine label="indent icon" value={selectedBundle.iconInset ? "yes" : "no"} theme={theme} />
@@ -463,6 +463,8 @@ function EditForm({ mode, setMode, theme }: { mode: Extract<Mode, { type: "edit"
               <Text color={index === mode.field ? "cyan" : undefined}>{mode.values.iconInset ? "[x]" : "[ ]"}</Text>
             ) : item.key === "icon" && !mode.values.icon ? (
               <Text color="gray">{fit(ICON_PLACEHOLDER, valueWidth)}</Text>
+            ) : item.key === "icon" ? (
+              <Text>{fit(displayPath(mode.values.icon), valueWidth)}</Text>
             ) : (
               <Text>{fit(String(mode.values[item.key]) || "-", valueWidth)}</Text>
             )}
@@ -718,6 +720,22 @@ function editNeedsSave(mode: Extract<Mode, { type: "edit" }>): boolean {
 
 function fit(value: string, width: number): string {
   return value.length <= width ? value : `${value.slice(0, Math.max(0, width - 1))}…`;
+}
+
+function displayPath(value: string): string {
+  if (!value || isUrl(value)) return value;
+  const home = homedir();
+  if (value === home) return "~";
+  return value.startsWith(`${home}/`) ? `~/${value.slice(home.length + 1)}` : value;
+}
+
+function isUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
 }
 
 function editFields(aerospaceInfo: AerospaceInfo): EditField[] {
