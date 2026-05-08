@@ -640,12 +640,24 @@ function Footer({ mode, hasAerospace, needsSave, needsBuild, buildProgress, spin
 }
 
 function BuildProgress({ progress, spinner }: { progress: BuildProgress & { name: string }; spinner: string }) {
-  const width = 16;
-  const filled = Math.max(0, Math.min(width, Math.round((progress.current / progress.total) * width)));
-  const bar = `${"█".repeat(filled)}${"░".repeat(width - filled)}`;
+  const { columns } = useWindowSize();
+  const percent = progress.total > 0 ? Math.round((progress.current / progress.total) * 100) : 0;
+  const prefix = `${spinner} ${progress.step}  `;
+  const terminalWidth = columns || 80;
+  const percentText = ` ${percent}%  `;
+  const width = Math.max(16, Math.min(48, terminalWidth - prefix.length - percentText.length - 16));
+  const name = fit(progress.name, Math.max(0, terminalWidth - prefix.length - width - percentText.length));
+  const ratio = progress.total > 0 ? progress.current / progress.total : 0;
+  const marker = ratio > 0 && ratio < 1 ? 1 : 0;
+  const filled = Math.max(0, Math.min(width - marker, Math.floor(ratio * width)));
+  const empty = Math.max(0, width - filled - marker);
   return (
-    <Text bold color="#FFA500">
-      {spinner} Building {progress.name} [{bar}] {progress.current}/{progress.total} {progress.step}
+    <Text color="#FFA500">
+      {spinner} {progress.step}{"  "}
+      <Text bold>{"━".repeat(filled)}</Text>
+      {marker ? <Text bold>╸</Text> : null}
+      <Text color="gray">{"─".repeat(empty)}</Text>
+      {percentText}{name}
     </Text>
   );
 }
