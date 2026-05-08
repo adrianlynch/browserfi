@@ -11,7 +11,7 @@ import type { BuildProgress, BundleConfig, Config, LoadedConfig, ResolvedBundle 
 
 const browserNames = ["chromium", "chrome", "chrome-canary", "brave", "edge", "firefox"];
 const spinnerFrames = ["*", "+", "-", "+"];
-const buildSteps = ["Preparing", "Copying app", "Configuring bundle", "Applying icon", "Updating attributes", "Signing", "Creating profile"];
+const buildSteps = ["preparing", "copying app", "configuring bundle", "applying icon", "updating attributes", "signing", "creating profile"];
 const BUILD_STEP_WIDTH = Math.max(...buildSteps.map((step) => step.length));
 const iconColors = [
   "",
@@ -370,7 +370,7 @@ function Table({ bundles, selected, showWorkspace, bundleNeedsBuild, theme }: { 
   return (
     <Box flexDirection="column">
       <Text color="gray">{tableBorder("top", widths)}</Text>
-      <Text color="gray">{tableRow(showWorkspace ? ["Status", "  Name", "Browser", "Workspace"] : ["Status", "  Name", "Browser"], widths)}</Text>
+      <Text color="gray">{tableRow(showWorkspace ? ["status", "  name", "browser", "workspace"] : ["status", "  name", "browser"], widths)}</Text>
       <Text color="gray">{tableRow(showWorkspace ? ["", "", "", ""] : ["", "", ""], widths)}</Text>
       {bundles.map((bundle, index) => {
         const active = index === selected;
@@ -646,7 +646,7 @@ function BuildProgressStatus({ progress, spinner }: { progress: BuildProgress & 
   const { columns } = useWindowSize();
   const percent = progress.total > 0 ? Math.round((progress.current / progress.total) * 100) : 0;
   const terminalWidth = columns || 80;
-  const leftLabel = `${spinner} ${progress.step.padEnd(BUILD_STEP_WIDTH)}`;
+  const leftLabel = `${spinner} ${progress.step.toLowerCase().padEnd(BUILD_STEP_WIDTH)}`;
   const rightWidth = Math.min(32, Math.max(8, terminalWidth - leftLabel.length - 1));
   const name = fit(progress.name, Math.max(0, rightWidth - 6));
   const rightLabel = `${String(percent).padStart(3)}%  ${name}`.padStart(rightWidth);
