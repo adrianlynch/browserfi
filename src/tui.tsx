@@ -46,6 +46,7 @@ const ICON_PLACEHOLDER = "- url to svg, png or jpg -";
 const COLOR_PICKER_LABEL_WIDTH = 12;
 const COLOR_PREVIEW_SIZE = 3;
 const COLOR_PREVIEW_WIDTH = COLOR_PREVIEW_SIZE * 2;
+const COLOR_PREVIEW_HEIGHT = COLOR_PREVIEW_SIZE + 2;
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const PACKAGE_VERSION = readPackageVersion();
 
@@ -506,8 +507,8 @@ function ColorValue({ value, active = false, suffix = "", theme }: { value: stri
 
 function ColorPicker({ colors, selectedColor, theme }: { colors: string[]; selectedColor: string; theme: TuiTheme }) {
   const selectedIndex = Math.max(0, colors.indexOf(selectedColor));
-  const maxStart = Math.max(0, colors.length - COLOR_PREVIEW_SIZE);
-  const previewStart = Math.min(Math.max(0, selectedIndex - 1), maxStart);
+  const maxStart = Math.max(0, colors.length - COLOR_PREVIEW_HEIGHT);
+  const previewStart = Math.min(Math.max(0, selectedIndex - Math.floor(COLOR_PREVIEW_HEIGHT / 2)), maxStart);
   return (
     <Box flexDirection="row" marginTop={1}>
       <Box flexDirection="column">
@@ -520,8 +521,7 @@ function ColorPicker({ colors, selectedColor, theme }: { colors: string[]; selec
           <ColorPreviewRow
             key={color || "default"}
             color={selectedColor}
-            showPreview={index >= previewStart && index < previewStart + COLOR_PREVIEW_SIZE}
-            showArrow={index === selectedIndex}
+            previewOffset={index >= previewStart && index < previewStart + COLOR_PREVIEW_HEIGHT ? index - previewStart : undefined}
             theme={theme}
           />
         ))}
@@ -541,13 +541,20 @@ function PickerColor({ color, selected, theme }: { color: string; selected: bool
   );
 }
 
-function ColorPreviewRow({ color, showPreview, showArrow, theme }: { color: string; showPreview: boolean; showArrow: boolean; theme: TuiTheme }) {
+function ColorPreviewRow({ color, previewOffset, theme }: { color: string; previewOffset?: number; theme: TuiTheme }) {
   const previewColor = color || (theme.isDark ? "#FFFFFF" : "#000000");
+  const emptyWidth = COLOR_PREVIEW_WIDTH + 2;
+  if (previewOffset === undefined) {
+    return <Text>{" ".repeat(emptyWidth)}</Text>;
+  }
+  if (previewOffset === 0) {
+    return <Text color={previewColor}>╭{"─".repeat(COLOR_PREVIEW_WIDTH)}╮</Text>;
+  }
+  if (previewOffset === COLOR_PREVIEW_HEIGHT - 1) {
+    return <Text color={previewColor}>╰{"─".repeat(COLOR_PREVIEW_WIDTH)}╯</Text>;
+  }
   return (
-    <Text>
-      <Text color={showArrow ? previewColor : "gray"}>{showArrow ? "◀" : " "}</Text>
-      {showPreview ? <ColorBlock color={color} theme={theme} /> : <Text>{" ".repeat(COLOR_PREVIEW_WIDTH)}</Text>}
-    </Text>
+    <Text color={previewColor}>│<ColorBlock color={color} theme={theme} />│</Text>
   );
 }
 
