@@ -549,13 +549,19 @@ function ColorPreviewRow({ color, previewOffset, theme }: { color: string; previ
     return <Text>{" ".repeat(emptyWidth)}</Text>;
   }
   if (previewOffset === 0) {
-    return <Text color={previewColor}>╭{"─".repeat(COLOR_PREVIEW_INNER_WIDTH)}╮</Text>;
+    return <Text color={LABEL_COLOR}>╭{"─".repeat(COLOR_PREVIEW_INNER_WIDTH)}╮</Text>;
   }
   if (previewOffset === COLOR_PREVIEW_HEIGHT - 1) {
-    return <Text color={previewColor}>╰{"─".repeat(COLOR_PREVIEW_INNER_WIDTH)}╯</Text>;
+    return <Text color={LABEL_COLOR}>╰{"─".repeat(COLOR_PREVIEW_INNER_WIDTH)}╯</Text>;
   }
   return (
-    <Text color={previewColor}>│▐<ColorBlock color={color} theme={theme} />▌│</Text>
+    <Text>
+      <Text color={LABEL_COLOR}>│</Text>
+      <Text color={previewColor}>▐</Text>
+      <ColorBlock color={color} theme={theme} />
+      <Text color={previewColor}>▌</Text>
+      <Text color={LABEL_COLOR}>│</Text>
+    </Text>
   );
 }
 
