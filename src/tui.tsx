@@ -43,7 +43,6 @@ const EDIT_PADDING_X = 2;
 const EDIT_LABEL_WIDTH = 22;
 const LABEL_COLOR = "#777777";
 const ICON_PLACEHOLDER = "- url to svg, png or jpg -";
-const COLOR_PICKER_LABEL_WIDTH = 12;
 const COLOR_PREVIEW_SIZE = 3;
 const COLOR_PREVIEW_WIDTH = COLOR_PREVIEW_SIZE * 2;
 const COLOR_PREVIEW_INNER_WIDTH = COLOR_PREVIEW_WIDTH + 2;
@@ -510,11 +509,12 @@ function ColorPicker({ colors, selectedColor, theme }: { colors: string[]; selec
   const selectedIndex = Math.max(0, colors.indexOf(selectedColor));
   const maxStart = Math.max(0, colors.length - COLOR_PREVIEW_HEIGHT);
   const previewStart = Math.min(Math.max(0, selectedIndex - Math.floor(COLOR_PREVIEW_HEIGHT / 2)), maxStart);
+  const labelWidth = Math.max(...colors.map((color) => color.length || "default".length));
   return (
     <Box flexDirection="row" marginTop={1}>
       <Box flexDirection="column">
         {colors.map((color) => (
-          <PickerColor key={color || "default"} color={color} selected={color === selectedColor} theme={theme} />
+          <PickerColor key={color || "default"} color={color} selected={color === selectedColor} labelWidth={labelWidth} theme={theme} />
         ))}
       </Box>
       <Box flexDirection="column" marginLeft={1}>
@@ -532,13 +532,13 @@ function ColorPicker({ colors, selectedColor, theme }: { colors: string[]; selec
   );
 }
 
-function PickerColor({ color, selected, theme }: { color: string; selected: boolean; theme: TuiTheme }) {
+function PickerColor({ color, selected, labelWidth, theme }: { color: string; selected: boolean; labelWidth: number; theme: TuiTheme }) {
   const label = color || "default";
   return (
     <Text>
       <Text color={selected ? "cyan" : "gray"}>{selected ? "› " : "  "}</Text>
       <ColorDot color={color} theme={theme} />
-      <Text color={selected ? "cyan" : undefined}> {label.padEnd(COLOR_PICKER_LABEL_WIDTH)}</Text>
+      <Text color={selected ? "cyan" : undefined}> {label.padEnd(labelWidth)}</Text>
     </Text>
   );
 }
