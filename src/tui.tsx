@@ -11,6 +11,8 @@ import type { BuildProgress, BundleConfig, Config, LoadedConfig, ResolvedBundle 
 
 const browserNames = ["chromium", "chrome", "chrome-canary", "brave", "edge", "firefox"];
 const spinnerFrames = ["*", "+", "-", "+"];
+const buildSteps = ["Preparing", "Copying app", "Configuring bundle", "Applying icon", "Updating attributes", "Signing", "Creating profile"];
+const BUILD_STEP_WIDTH = Math.max(...buildSteps.map((step) => step.length));
 const iconColors = [
   "",
   "#EF4444",
@@ -642,22 +644,25 @@ function Footer({ mode, hasAerospace, needsSave, needsBuild, buildProgress, spin
 function BuildProgress({ progress, spinner }: { progress: BuildProgress & { name: string }; spinner: string }) {
   const { columns } = useWindowSize();
   const percent = progress.total > 0 ? Math.round((progress.current / progress.total) * 100) : 0;
-  const prefix = `${spinner} ${progress.step}  `;
   const terminalWidth = columns || 80;
-  const percentText = ` ${percent}%  `;
-  const width = Math.max(16, Math.min(48, terminalWidth - prefix.length - percentText.length - 16));
-  const name = fit(progress.name, Math.max(0, terminalWidth - prefix.length - width - percentText.length));
+  const leftLabel = `${spinner} ${progress.step.padEnd(BUILD_STEP_WIDTH)}`;
+  const minBarWidth = 12;
+  const maxRightWidth = Math.max(8, terminalWidth - leftLabel.length - minBarWidth - 2);
+  const rightWidth = Math.min(32, maxRightWidth);
+  const name = fit(progress.name, Math.max(0, rightWidth - 6));
+  const rightLabel = `${String(percent).padStart(3)}%  ${name}`.padStart(rightWidth);
+  const width = Math.max(1, terminalWidth - leftLabel.length - rightWidth - 2);
   const ratio = progress.total > 0 ? progress.current / progress.total : 0;
   const marker = ratio > 0 && ratio < 1 ? 1 : 0;
   const filled = Math.max(0, Math.min(width - marker, Math.floor(ratio * width)));
   const empty = Math.max(0, width - filled - marker);
   return (
     <Text color="#FFA500">
-      {spinner} {progress.step}{"  "}
+      {leftLabel}{" "}
       <Text bold>{"━".repeat(filled)}</Text>
       {marker ? <Text bold>╸</Text> : null}
       <Text color="gray">{"─".repeat(empty)}</Text>
-      {percentText}{name}
+      {" "}{rightLabel}
     </Text>
   );
 }
