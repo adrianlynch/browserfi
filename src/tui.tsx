@@ -551,10 +551,20 @@ function ColorPreviewRow({ color, previewOffset, showArrow, theme }: { color: st
     return <Text>{" ".repeat(emptyWidth)}</Text>;
   }
   if (previewOffset === 0) {
-    return <Text>{connector}<Text color={LABEL_COLOR}>╭{"─".repeat(COLOR_PREVIEW_INNER_WIDTH)}╮</Text></Text>;
+    return (
+      <Text>
+        {connector}
+        <Text color={LABEL_COLOR}>{showArrow ? "┬" : "╭"}{"─".repeat(COLOR_PREVIEW_INNER_WIDTH)}╮</Text>
+      </Text>
+    );
   }
   if (previewOffset === COLOR_PREVIEW_HEIGHT - 1) {
-    return <Text>{connector}<Text color={LABEL_COLOR}>╰{"─".repeat(COLOR_PREVIEW_INNER_WIDTH)}╯</Text></Text>;
+    return (
+      <Text>
+        {connector}
+        <Text color={LABEL_COLOR}>{showArrow ? "┴" : "╰"}{"─".repeat(COLOR_PREVIEW_INNER_WIDTH)}╯</Text>
+      </Text>
+    );
   }
   return (
     <Text>
