@@ -1,6 +1,6 @@
 {
   "name": "@adrianlynch/browserfi",
-  "version": "0.1.2",
+  "version": "1.0.0",
   "description": "Per-context browser app bundles for macOS.",
   "type": "module",
   "bin": {
