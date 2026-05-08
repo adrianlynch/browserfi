@@ -38,6 +38,8 @@ const iconColors = [
   "#FFFFFF",
   "#111111",
 ];
+const CUSTOM_COLOR_OPTION = "#custom";
+const iconColorOptions = [...iconColors, CUSTOM_COLOR_OPTION];
 const REDRAW_INTERVAL_MS = 2000;
 const SELECTED_ROW_BACKGROUND_LIGHT = "#FFEAF3";
 const SELECTED_ROW_BACKGROUND_DARK = "#5A2438";
@@ -143,7 +145,7 @@ function BrowserfiTui({ options, onDone, onError, onRefresh }: { options: TuiOpt
   const browserOptions = installedBrowsers(loaded.config.bundles);
   const needsBuild = mode.type === "table" && selectedBundle ? options.bundleNeedsBuild(selectedBundle) : false;
   const needsSave = mode.type === "edit" && editNeedsSave(mode);
-  const saveShortcut = mode.type === "edit" && isTextEditField(mode.fields[mode.field]?.key) ? "ctrl+s save" : "s save";
+  const saveShortcut = mode.type === "edit" && isTextInputField(mode.fields[mode.field]?.key, mode.values) ? "ctrl+s save" : "s save";
   const theme = currentTuiTheme();
 
   const reload = () => setLoaded(options.loadConfig(loaded.path));
@@ -207,13 +209,15 @@ function BrowserfiTui({ options, onDone, onError, onRefresh }: { options: TuiOpt
           setMode({ ...mode, values: { ...mode.values, workspace: nextOption(aerospaceInfo.workspaces, mode.values.workspace, direction) } });
         } else if (mode.picker === "iconColor" && (key.upArrow || key.downArrow || input === "j" || input === "k")) {
           const direction = key.upArrow || input === "k" ? -1 : 1;
-          setMode({ ...mode, values: { ...mode.values, iconColor: nextOption(iconColors, mode.values.iconColor, direction) } });
+          setMode({ ...mode, values: { ...mode.values, iconColor: nextColorOption(mode.values.iconColor, direction) } });
         } else if (mode.picker === "iconBackgroundColor" && (key.upArrow || key.downArrow || input === "j" || input === "k")) {
           const direction = key.upArrow || input === "k" ? -1 : 1;
-          setMode({ ...mode, values: { ...mode.values, iconBackgroundColor: nextOption(iconColors, mode.values.iconBackgroundColor, direction) } });
+          setMode({ ...mode, values: { ...mode.values, iconBackgroundColor: nextColorOption(mode.values.iconBackgroundColor, direction) } });
         } else if (mode.picker === "iconInset" && (key.upArrow || key.downArrow || input === "j" || input === "k")) {
           const direction = key.upArrow || input === "k" ? -1 : 1;
           setMode({ ...mode, values: { ...mode.values, iconInset: nextOption(iconInsetOptions, mode.values.iconInset, direction) } });
+        } else if ((mode.picker === "iconColor" || mode.picker === "iconBackgroundColor") && key.return && mode.values[mode.picker] === CUSTOM_COLOR_OPTION) {
+          setMode({ ...mode, picker: undefined, values: { ...mode.values, [mode.picker]: "#" } });
         } else if (mode.picker && key.return) {
           setMode({ ...mode, picker: undefined });
         } else if (key.upArrow || input === "k") {
@@ -230,7 +234,7 @@ function BrowserfiTui({ options, onDone, onError, onRefresh }: { options: TuiOpt
           setMode({ ...mode, picker: "iconBackgroundColor" });
         } else if (key.return && currentField === "iconInset") {
           setMode({ ...mode, picker: "iconInset" });
-        } else if (isSaveInput(input, key) || (input === "s" && !isTextEditField(currentField))) {
+        } else if (isSaveInput(input, key) || (input === "s" && !isTextInputField(currentField, mode.values))) {
           saveCurrentEdit();
         }
         return;
@@ -458,7 +462,12 @@ function EditForm({ mode, setMode, theme }: { mode: Extract<Mode, { type: "edit"
             <Box width={EDIT_LABEL_WIDTH}>
               <Text color={LABEL_COLOR}>{item.label}:</Text>
             </Box>
-            {index === mode.field && item.key !== "workspace" && item.key !== "browser" && item.key !== "iconColor" && item.key !== "iconBackgroundColor" && item.key !== "iconInset" ? (
+            {index === mode.field && (item.key === "iconColor" || item.key === "iconBackgroundColor") && isCustomColorValue(mode.values[item.key]) && !mode.picker ? (
+              <TextInput
+                value={mode.values[item.key]}
+                onChange={(value) => setMode({ ...mode, values: { ...mode.values, [item.key]: value } })}
+              />
+            ) : index === mode.field && item.key !== "workspace" && item.key !== "browser" && item.key !== "iconColor" && item.key !== "iconBackgroundColor" && item.key !== "iconInset" ? (
               <TextInput
                 value={String(mode.values[item.key])}
                 onChange={(value) => setMode({ ...mode, values: { ...mode.values, [field.key]: value } })}
@@ -506,10 +515,10 @@ function EditForm({ mode, setMode, theme }: { mode: Extract<Mode, { type: "edit"
         </Box>
       )}
       {mode.picker === "iconColor" && (
-        <ColorPicker colors={iconColors} selectedColor={mode.values.iconColor} theme={theme} />
+        <ColorPicker colors={iconColorOptions} selectedColor={mode.values.iconColor} theme={theme} />
       )}
       {mode.picker === "iconBackgroundColor" && (
-        <ColorPicker colors={iconColors} selectedColor={mode.values.iconBackgroundColor} theme={theme} />
+        <ColorPicker colors={iconColorOptions} selectedColor={mode.values.iconBackgroundColor} theme={theme} />
       )}
       {mode.picker === "iconInset" && (
         <Box flexDirection="column" marginTop={1}>
@@ -535,7 +544,7 @@ function ColorValue({ value, active = false, suffix = "", theme }: { value: stri
 }
 
 function ColorPicker({ colors, selectedColor, theme }: { colors: string[]; selectedColor: string; theme: TuiTheme }) {
-  const selectedIndex = Math.max(0, colors.indexOf(selectedColor));
+  const selectedIndex = Math.max(0, colorOptionIndex(colors, selectedColor));
   const maxStart = Math.max(0, colors.length - COLOR_PREVIEW_HEIGHT);
   const previewStart = Math.min(Math.max(0, selectedIndex - Math.floor(COLOR_PREVIEW_HEIGHT / 2)), maxStart);
   const labelWidth = Math.max(...colors.map((color) => color.length || "default".length));
@@ -566,14 +575,14 @@ function PickerColor({ color, selected, labelWidth, theme }: { color: string; se
   return (
     <Text>
       <Text color={selected ? "cyan" : "gray"}>{selected ? "› " : "  "}</Text>
-      <ColorDot color={color} theme={theme} />
+      <ColorDot color={color === CUSTOM_COLOR_OPTION ? "" : color} theme={theme} />
       <Text color={selected ? "cyan" : undefined}> {label.padEnd(labelWidth)}</Text>
     </Text>
   );
 }
 
 function ColorPreviewRow({ color, previewOffset, showArrow, theme }: { color: string; previewOffset?: number; showArrow: boolean; theme: TuiTheme }) {
-  const previewColor = color || (theme.isDark ? "#FFFFFF" : "#000000");
+  const previewColor = previewableColor(color, theme);
   const emptyWidth = COLOR_PREVIEW_INNER_WIDTH + 3;
   const connector = <Text color={LABEL_COLOR}>{showArrow ? "─" : " "}</Text>;
   if (previewOffset === undefined) {
@@ -608,11 +617,11 @@ function ColorPreviewRow({ color, previewOffset, showArrow, theme }: { color: st
 }
 
 function ColorBlock({ color, theme }: { color: string; theme: TuiTheme }) {
-  return <Text color={color || (theme.isDark ? "#FFFFFF" : "#000000")}>{"█".repeat(COLOR_PREVIEW_WIDTH)}</Text>;
+  return <Text color={previewableColor(color, theme)}>{"█".repeat(COLOR_PREVIEW_WIDTH)}</Text>;
 }
 
 function ColorDot({ color, backgroundColor, blankWhenEmpty = false, theme }: { color?: string; backgroundColor?: string; blankWhenEmpty?: boolean; theme: TuiTheme }) {
-  if (!color) {
+  if (!color || !isTerminalColor(color)) {
     return <Text backgroundColor={backgroundColor} color="gray">{blankWhenEmpty ? " " : "●"}</Text>;
   }
   const normalized = color.toLowerCase();
@@ -742,8 +751,8 @@ function editNeedsSave(mode: Extract<Mode, { type: "edit" }>): boolean {
   return mode.fields.some((field) => mode.values[field.key] !== mode.initialValues[field.key]);
 }
 
-function isTextEditField(field: keyof EditValues | undefined): boolean {
-  return field === "displayName" || field === "icon";
+function isTextInputField(field: keyof EditValues | undefined, values: EditValues): boolean {
+  return field === "displayName" || field === "icon" || ((field === "iconColor" || field === "iconBackgroundColor") && isCustomColorValue(values[field]));
 }
 
 function fit(value: string, width: number): string {
@@ -928,6 +937,28 @@ function nextOption<T extends string>(options: T[], current: T, direction: numbe
   if (options.length === 0) return current;
   const index = Math.max(0, options.indexOf(current));
   return options[(index + direction + options.length) % options.length];
+}
+
+function nextColorOption(current: string, direction: number): string {
+  const index = colorOptionIndex(iconColorOptions, current);
+  return iconColorOptions[(index + direction + iconColorOptions.length) % iconColorOptions.length];
+}
+
+function colorOptionIndex(options: string[], value: string): number {
+  const index = options.indexOf(value);
+  return index === -1 ? options.length - 1 : index;
+}
+
+function isCustomColorValue(value: string): boolean {
+  return value.startsWith("#") && !iconColors.includes(value);
+}
+
+function previewableColor(color: string, theme: TuiTheme): string {
+  return isTerminalColor(color) ? color : theme.isDark ? "#FFFFFF" : "#000000";
+}
+
+function isTerminalColor(color: string): boolean {
+  return /^#[0-9A-Fa-f]{6}$/.test(color);
 }
 
 function workspaceSort(a: string, b: string): number {
