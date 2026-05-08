@@ -465,7 +465,7 @@ function EditForm({ mode, setMode, theme }: { mode: Extract<Mode, { type: "edit"
             {index === mode.field && (item.key === "iconColor" || item.key === "iconBackgroundColor") && isCustomColorValue(mode.values[item.key]) && !mode.picker ? (
               <TextInput
                 value={mode.values[item.key]}
-                onChange={(value) => setMode({ ...mode, values: { ...mode.values, [item.key]: value } })}
+                onChange={(value) => setMode({ ...mode, values: { ...mode.values, [item.key]: normalizeColorInput(value) } })}
               />
             ) : index === mode.field && item.key !== "workspace" && item.key !== "browser" && item.key !== "iconColor" && item.key !== "iconBackgroundColor" && item.key !== "iconInset" ? (
               <TextInput
@@ -951,6 +951,11 @@ function colorOptionIndex(options: string[], value: string): number {
 
 function isCustomColorValue(value: string): boolean {
   return value.startsWith("#") && !iconColors.includes(value);
+}
+
+function normalizeColorInput(value: string): string {
+  const trimmed = value.trim();
+  return trimmed.startsWith("##") ? `#${trimmed.replace(/^#+/, "")}` : trimmed;
 }
 
 function previewableColor(color: string, theme: TuiTheme): string {
