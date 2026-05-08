@@ -85,6 +85,7 @@ type Mode =
       browserOptions: string[];
       workspaceOptions: string[];
       picker?: "browser" | "workspace" | "iconColor" | "iconBackgroundColor" | "iconInset";
+      editing?: { field: TextInputField; value: string };
     }
   | { type: "confirm"; message: string; run: () => string };
 
@@ -100,6 +101,7 @@ type EditValues = {
 };
 
 type EditField = { key: keyof EditValues; label: string };
+type TextInputField = "displayName" | "icon" | "iconColor" | "iconBackgroundColor";
 
 type TuiTheme = {
   isDark: boolean;
@@ -145,7 +147,8 @@ function BrowserfiTui({ options, onDone, onError, onRefresh }: { options: TuiOpt
   const browserOptions = installedBrowsers(loaded.config.bundles);
   const needsBuild = mode.type === "table" && selectedBundle ? options.bundleNeedsBuild(selectedBundle) : false;
   const needsSave = mode.type === "edit" && editNeedsSave(mode);
-  const saveShortcut = mode.type === "edit" && isTextInputField(mode.fields[mode.field]?.key, mode.values) ? "ctrl+s save" : "s save";
+  const saveShortcut = mode.type === "edit" && mode.editing ? "enter save field" : "s save";
+  const editingField = mode.type === "edit" && Boolean(mode.editing);
   const theme = currentTuiTheme();
 
   const reload = () => setLoaded(options.loadConfig(loaded.path));
@@ -193,6 +196,14 @@ function BrowserfiTui({ options, onDone, onError, onRefresh }: { options: TuiOpt
 
       if (mode.type === "edit") {
         const currentField = mode.fields[mode.field]?.key;
+        if (mode.editing) {
+          if (key.escape) {
+            setMode({ ...mode, editing: undefined });
+          } else if (key.return) {
+            setMode({ ...mode, values: { ...mode.values, [mode.editing.field]: mode.editing.value }, editing: undefined });
+          }
+          return;
+        }
         const saveCurrentEdit = () => {
           saveEdit(options, loaded, mode.originalKey, mode.values, mode.workspaceOptions);
           setMessage(`updated ${loaded.path}`);
@@ -217,7 +228,7 @@ function BrowserfiTui({ options, onDone, onError, onRefresh }: { options: TuiOpt
           const direction = key.upArrow || input === "k" ? -1 : 1;
           setMode({ ...mode, values: { ...mode.values, iconInset: nextOption(iconInsetOptions, mode.values.iconInset, direction) } });
         } else if ((mode.picker === "iconColor" || mode.picker === "iconBackgroundColor") && key.return && mode.values[mode.picker] === CUSTOM_COLOR_OPTION) {
-          setMode({ ...mode, picker: undefined, values: { ...mode.values, [mode.picker]: "#" } });
+          setMode({ ...mode, picker: undefined, editing: { field: mode.picker, value: "#" } });
         } else if (mode.picker && key.return) {
           setMode({ ...mode, picker: undefined });
         } else if (key.upArrow || input === "k") {
@@ -228,13 +239,21 @@ function BrowserfiTui({ options, onDone, onError, onRefresh }: { options: TuiOpt
           setMode({ ...mode, picker: "browser" });
         } else if (key.return && currentField === "workspace") {
           setMode({ ...mode, picker: "workspace" });
+        } else if (key.return && currentField === "displayName") {
+          setMode({ ...mode, editing: { field: "displayName", value: mode.values.displayName } });
+        } else if (key.return && currentField === "icon") {
+          setMode({ ...mode, editing: { field: "icon", value: mode.values.icon } });
+        } else if (key.return && currentField === "iconColor" && isCustomColorValue(mode.values.iconColor)) {
+          setMode({ ...mode, editing: { field: "iconColor", value: mode.values.iconColor } });
         } else if (key.return && currentField === "iconColor") {
           setMode({ ...mode, picker: "iconColor" });
+        } else if (key.return && currentField === "iconBackgroundColor" && isCustomColorValue(mode.values.iconBackgroundColor)) {
+          setMode({ ...mode, editing: { field: "iconBackgroundColor", value: mode.values.iconBackgroundColor } });
         } else if (key.return && currentField === "iconBackgroundColor") {
           setMode({ ...mode, picker: "iconBackgroundColor" });
         } else if (key.return && currentField === "iconInset") {
           setMode({ ...mode, picker: "iconInset" });
-        } else if (isSaveInput(input, key) || (input === "s" && !isTextInputField(currentField, mode.values))) {
+        } else if (input === "s") {
           saveCurrentEdit();
         }
         return;
@@ -299,6 +318,7 @@ function BrowserfiTui({ options, onDone, onError, onRefresh }: { options: TuiOpt
         spinner={spinnerFrames[(spinnerFrame + (buildProgress?.current ?? 0)) % spinnerFrames.length]}
         notice={message}
         saveShortcut={saveShortcut}
+        editingField={editingField}
       />
     </Box>
   );
@@ -306,10 +326,6 @@ function BrowserfiTui({ options, onDone, onError, onRefresh }: { options: TuiOpt
 
 function isRefreshInput(input: string, key: { ctrl?: boolean; name?: string; raw?: string }): boolean {
   return (key.ctrl && (input === "k" || input === "l" || key.name === "k" || key.name === "l")) || input === "\u000b" || input === "\u000c" || key.raw === "\u000b" || key.raw === "\u000c";
-}
-
-function isSaveInput(input: string, key: { ctrl?: boolean; name?: string; raw?: string }): boolean {
-  return (key.ctrl && (input === "s" || key.name === "s")) || input === "\u0013" || key.raw === "\u0013";
 }
 
 function currentTuiTheme(): TuiTheme {
@@ -450,7 +466,6 @@ function TableBundleRow({ bundle, active, status, showWorkspace, widths, theme }
 
 function EditForm({ mode, setMode, theme }: { mode: Extract<Mode, { type: "edit" }>; setMode: (mode: Mode) => void; theme: TuiTheme }) {
   const { columns } = useWindowSize();
-  const field = mode.fields[mode.field];
   const valueWidth = Math.max(12, (columns || 80) - 2 - (EDIT_PADDING_X * 2) - EDIT_LABEL_WIDTH);
   return (
     <Box flexDirection="column">
@@ -462,20 +477,25 @@ function EditForm({ mode, setMode, theme }: { mode: Extract<Mode, { type: "edit"
             <Box width={EDIT_LABEL_WIDTH}>
               <Text color={LABEL_COLOR}>{item.label}:</Text>
             </Box>
-            {index === mode.field && (item.key === "iconColor" || item.key === "iconBackgroundColor") && isCustomColorValue(mode.values[item.key]) && !mode.picker ? (
+            {mode.editing && mode.editing.field === item.key ? (
               <TextInput
-                value={mode.values[item.key]}
-                onChange={(value) => setMode({ ...mode, values: { ...mode.values, [item.key]: normalizeColorInput(value) } })}
-              />
-            ) : index === mode.field && item.key !== "workspace" && item.key !== "browser" && item.key !== "iconColor" && item.key !== "iconBackgroundColor" && item.key !== "iconInset" ? (
-              <TextInput
-                value={String(mode.values[item.key])}
-                onChange={(value) => setMode({ ...mode, values: { ...mode.values, [field.key]: value } })}
+                value={mode.editing.value}
+                onChange={(value) => setMode({ ...mode, editing: { ...mode.editing!, value: item.key === "iconColor" || item.key === "iconBackgroundColor" ? normalizeColorInput(value) : value } })}
               />
             ) : index === mode.field && item.key === "browser" ? (
               <Text color="cyan">{mode.values.browser || "-"} {mode.picker === "browser" ? "" : "(enter to choose)"}</Text>
             ) : index === mode.field && item.key === "workspace" ? (
               <Text color="cyan">{mode.values.workspace || "-"} {mode.picker === "workspace" ? "" : "(enter to choose)"}</Text>
+            ) : index === mode.field && item.key === "displayName" ? (
+              <Text color="cyan">{fit(mode.values.displayName || "-", valueWidth)} {mode.editing ? "" : "(enter to edit)"}</Text>
+            ) : index === mode.field && item.key === "icon" && !mode.values.icon ? (
+              <Text color="gray">{fit(`${ICON_PLACEHOLDER} (enter to edit)`, valueWidth)}</Text>
+            ) : index === mode.field && item.key === "icon" ? (
+              <Text color="cyan">{fit(displayPath(mode.values.icon), valueWidth)} {mode.editing ? "" : "(enter to edit)"}</Text>
+            ) : index === mode.field && item.key === "iconColor" && isCustomColorValue(mode.values.iconColor) ? (
+              <Text color="cyan">{mode.values.iconColor} {mode.editing ? "" : "(enter to edit)"}</Text>
+            ) : index === mode.field && item.key === "iconBackgroundColor" && isCustomColorValue(mode.values.iconBackgroundColor) ? (
+              <Text color="cyan">{mode.values.iconBackgroundColor} {mode.editing ? "" : "(enter to edit)"}</Text>
             ) : index === mode.field && item.key === "iconColor" ? (
               <ColorValue value={mode.values.iconColor} active suffix={mode.picker === "iconColor" ? "" : " (enter to choose)"} theme={theme} />
             ) : index === mode.field && item.key === "iconBackgroundColor" ? (
@@ -633,7 +653,7 @@ function ColorDot({ color, backgroundColor, blankWhenEmpty = false, theme }: { c
   return <Text backgroundColor={backgroundColor} color={color}>●</Text>;
 }
 
-function Footer({ mode, hasAerospace, needsSave, needsBuild, buildProgress, spinner, notice, saveShortcut = "s save" }: { mode: Mode["type"]; hasAerospace?: boolean; needsSave?: boolean; needsBuild?: boolean; buildProgress?: BuildProgress & { name: string }; spinner: string; notice?: string; saveShortcut?: string }) {
+function Footer({ mode, hasAerospace, needsSave, needsBuild, buildProgress, spinner, notice, saveShortcut = "s save", editingField = false }: { mode: Mode["type"]; hasAerospace?: boolean; needsSave?: boolean; needsBuild?: boolean; buildProgress?: BuildProgress & { name: string }; spinner: string; notice?: string; saveShortcut?: string; editingField?: boolean }) {
   const { columns } = useWindowSize();
   const rule = "─".repeat(Math.max(20, columns || 80));
   if (mode === "edit") {
@@ -642,7 +662,7 @@ function Footer({ mode, hasAerospace, needsSave, needsBuild, buildProgress, spin
         {needsSave ? <Text bold color="green">Unsaved changes (s) to save</Text> : <Text> </Text>}
         <Text color="gray">{rule}</Text>
         <Text color="gray">
-          {hasAerospace ? "↑/↓ move fields • enter choose options • " : "↑/↓ move fields • enter choose browser/color • "}
+          {editingField ? "typing • " : hasAerospace ? "↑/↓ move fields • enter edit/choose options • " : "↑/↓ move fields • enter edit/choose browser/color • "}
           <Text bold={needsSave} color={needsSave ? "green" : "gray"}>{saveShortcut}</Text>
           {" • esc cancel"}
         </Text>
@@ -749,10 +769,6 @@ function sum(values: number[]): number {
 function editNeedsSave(mode: Extract<Mode, { type: "edit" }>): boolean {
   if (!mode.originalKey) return true;
   return mode.fields.some((field) => mode.values[field.key] !== mode.initialValues[field.key]);
-}
-
-function isTextInputField(field: keyof EditValues | undefined, values: EditValues): boolean {
-  return field === "displayName" || field === "icon" || ((field === "iconColor" || field === "iconBackgroundColor") && isCustomColorValue(values[field]));
 }
 
 function fit(value: string, width: number): string {
