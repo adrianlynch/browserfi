@@ -142,6 +142,7 @@ function BrowserfiTui({ options, onDone, onError, onRefresh }: { options: TuiOpt
   const browserOptions = installedBrowsers(loaded.config.bundles);
   const needsBuild = mode.type === "table" && selectedBundle ? options.bundleNeedsBuild(selectedBundle) : false;
   const needsSave = mode.type === "edit" && editNeedsSave(mode);
+  const saveShortcut = mode.type === "edit" && isTextEditField(mode.fields[mode.field]?.key) ? "ctrl+s save" : "s save";
   const theme = currentTuiTheme();
 
   const reload = () => setLoaded(options.loadConfig(loaded.path));
@@ -188,6 +189,13 @@ function BrowserfiTui({ options, onDone, onError, onRefresh }: { options: TuiOpt
       }
 
       if (mode.type === "edit") {
+        const currentField = mode.fields[mode.field]?.key;
+        const saveCurrentEdit = () => {
+          saveEdit(options, loaded, mode.originalKey, mode.values, mode.workspaceOptions);
+          setMessage(`updated ${loaded.path}`);
+          reload();
+          setMode({ type: "table" });
+        };
         if (key.escape) {
           setMode(mode.picker ? { ...mode, picker: undefined } : { type: "table" });
         } else if (mode.picker === "browser" && (key.upArrow || key.downArrow || input === "j" || input === "k")) {
@@ -204,25 +212,22 @@ function BrowserfiTui({ options, onDone, onError, onRefresh }: { options: TuiOpt
           setMode({ ...mode, values: { ...mode.values, iconBackgroundColor: nextOption(iconColors, mode.values.iconBackgroundColor, direction) } });
         } else if (mode.picker && key.return) {
           setMode({ ...mode, picker: undefined });
-        } else if ((key.return || input === " ") && mode.fields[mode.field]?.key === "iconInset") {
+        } else if ((key.return || input === " ") && currentField === "iconInset") {
           setMode({ ...mode, values: { ...mode.values, iconInset: !mode.values.iconInset } });
         } else if (key.upArrow || input === "k") {
           setMode({ ...mode, field: Math.max(0, mode.field - 1), picker: undefined });
         } else if (key.downArrow || input === "j") {
           setMode({ ...mode, field: Math.min(mode.fields.length - 1, mode.field + 1), picker: undefined });
-        } else if (key.return && mode.fields[mode.field]?.key === "browser") {
+        } else if (key.return && currentField === "browser") {
           setMode({ ...mode, picker: "browser" });
-        } else if (key.return && mode.fields[mode.field]?.key === "workspace") {
+        } else if (key.return && currentField === "workspace") {
           setMode({ ...mode, picker: "workspace" });
-        } else if (key.return && mode.fields[mode.field]?.key === "iconColor") {
+        } else if (key.return && currentField === "iconColor") {
           setMode({ ...mode, picker: "iconColor" });
-        } else if (key.return && mode.fields[mode.field]?.key === "iconBackgroundColor") {
+        } else if (key.return && currentField === "iconBackgroundColor") {
           setMode({ ...mode, picker: "iconBackgroundColor" });
-        } else if (input === "s") {
-          saveEdit(options, loaded, mode.originalKey, mode.values, mode.workspaceOptions);
-          setMessage(`updated ${loaded.path}`);
-          reload();
-          setMode({ type: "table" });
+        } else if (isSaveInput(input, key) || (input === "s" && !isTextEditField(currentField))) {
+          saveCurrentEdit();
         }
         return;
       }
@@ -285,6 +290,7 @@ function BrowserfiTui({ options, onDone, onError, onRefresh }: { options: TuiOpt
         buildProgress={buildProgress}
         spinner={spinnerFrames[(spinnerFrame + (buildProgress?.current ?? 0)) % spinnerFrames.length]}
         notice={message}
+        saveShortcut={saveShortcut}
       />
     </Box>
   );
@@ -292,6 +298,10 @@ function BrowserfiTui({ options, onDone, onError, onRefresh }: { options: TuiOpt
 
 function isRefreshInput(input: string, key: { ctrl?: boolean; name?: string; raw?: string }): boolean {
   return (key.ctrl && (input === "k" || input === "l" || key.name === "k" || key.name === "l")) || input === "\u000b" || input === "\u000c" || key.raw === "\u000b" || key.raw === "\u000c";
+}
+
+function isSaveInput(input: string, key: { ctrl?: boolean; name?: string; raw?: string }): boolean {
+  return (key.ctrl && (input === "s" || key.name === "s")) || input === "\u0013" || key.raw === "\u0013";
 }
 
 function currentTuiTheme(): TuiTheme {
@@ -600,7 +610,7 @@ function ColorDot({ color, backgroundColor, blankWhenEmpty = false, theme }: { c
   return <Text backgroundColor={backgroundColor} color={color}>●</Text>;
 }
 
-function Footer({ mode, hasAerospace, needsSave, needsBuild, buildProgress, spinner, notice }: { mode: Mode["type"]; hasAerospace?: boolean; needsSave?: boolean; needsBuild?: boolean; buildProgress?: BuildProgress & { name: string }; spinner: string; notice?: string }) {
+function Footer({ mode, hasAerospace, needsSave, needsBuild, buildProgress, spinner, notice, saveShortcut = "s save" }: { mode: Mode["type"]; hasAerospace?: boolean; needsSave?: boolean; needsBuild?: boolean; buildProgress?: BuildProgress & { name: string }; spinner: string; notice?: string; saveShortcut?: string }) {
   const { columns } = useWindowSize();
   const rule = "─".repeat(Math.max(20, columns || 80));
   if (mode === "edit") {
@@ -610,7 +620,7 @@ function Footer({ mode, hasAerospace, needsSave, needsBuild, buildProgress, spin
         <Text color="gray">{rule}</Text>
         <Text color="gray">
           {hasAerospace ? "↑/↓ move fields • enter choose options • " : "↑/↓ move fields • enter choose browser/color • "}
-          <Text bold={needsSave} color={needsSave ? "green" : "gray"}>s save</Text>
+          <Text bold={needsSave} color={needsSave ? "green" : "gray"}>{saveShortcut}</Text>
           {" • esc cancel"}
         </Text>
       </Box>
@@ -716,6 +726,10 @@ function sum(values: number[]): number {
 function editNeedsSave(mode: Extract<Mode, { type: "edit" }>): boolean {
   if (!mode.originalKey) return true;
   return mode.fields.some((field) => mode.values[field.key] !== mode.initialValues[field.key]);
+}
+
+function isTextEditField(field: keyof EditValues | undefined): boolean {
+  return field === "displayName" || field === "icon";
 }
 
 function fit(value: string, width: number): string {
