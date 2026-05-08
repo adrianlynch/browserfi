@@ -487,15 +487,15 @@ function EditForm({ mode, setMode, theme }: { mode: Extract<Mode, { type: "edit"
             ) : index === mode.field && item.key === "workspace" ? (
               <Text color="cyan">{mode.values.workspace || "-"} {mode.picker === "workspace" ? "" : "(enter to choose)"}</Text>
             ) : index === mode.field && item.key === "displayName" ? (
-              <Text color="cyan">{fit(mode.values.displayName || "-", valueWidth)} {mode.editing ? "" : "(enter to edit)"}</Text>
+              <Text color="cyan">{editablePreview(mode.values.displayName || "-", valueWidth)}</Text>
             ) : index === mode.field && item.key === "icon" && !mode.values.icon ? (
-              <Text color="gray">{fit(`${ICON_PLACEHOLDER} (enter to edit)`, valueWidth)}</Text>
+              <Text color="gray">{editablePreview(ICON_PLACEHOLDER, valueWidth)}</Text>
             ) : index === mode.field && item.key === "icon" ? (
-              <Text color="cyan">{fit(displayPath(mode.values.icon), valueWidth)} {mode.editing ? "" : "(enter to edit)"}</Text>
+              <Text color="cyan">{editablePreview(displayPath(mode.values.icon), valueWidth)}</Text>
             ) : index === mode.field && item.key === "iconColor" && isCustomColorValue(mode.values.iconColor) ? (
-              <Text color="cyan">{mode.values.iconColor} {mode.editing ? "" : "(enter to edit)"}</Text>
+              <Text color="cyan">{editablePreview(mode.values.iconColor, valueWidth)}</Text>
             ) : index === mode.field && item.key === "iconBackgroundColor" && isCustomColorValue(mode.values.iconBackgroundColor) ? (
-              <Text color="cyan">{mode.values.iconBackgroundColor} {mode.editing ? "" : "(enter to edit)"}</Text>
+              <Text color="cyan">{editablePreview(mode.values.iconBackgroundColor, valueWidth)}</Text>
             ) : index === mode.field && item.key === "iconColor" ? (
               <ColorValue value={mode.values.iconColor} active suffix={mode.picker === "iconColor" ? "" : " (enter to choose)"} theme={theme} />
             ) : index === mode.field && item.key === "iconBackgroundColor" ? (
@@ -773,6 +773,21 @@ function editNeedsSave(mode: Extract<Mode, { type: "edit" }>): boolean {
 
 function fit(value: string, width: number): string {
   return value.length <= width ? value : `${value.slice(0, Math.max(0, width - 1))}…`;
+}
+
+function fitMiddle(value: string, width: number): string {
+  if (value.length <= width) return value;
+  if (width <= 1) return "…";
+  const available = width - 1;
+  const start = Math.ceil(available / 2);
+  const end = Math.floor(available / 2);
+  return `${value.slice(0, start)}…${value.slice(value.length - end)}`;
+}
+
+function editablePreview(value: string, width: number): string {
+  const suffix = " (enter to edit)";
+  if (width <= suffix.length + 1) return fitMiddle(`${value}${suffix}`, width);
+  return `${fitMiddle(value, width - suffix.length)}${suffix}`;
 }
 
 function displayPath(value: string): string {
