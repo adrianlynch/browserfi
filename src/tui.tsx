@@ -45,6 +45,7 @@ const LABEL_COLOR = "#777777";
 const ICON_PLACEHOLDER = "- url to svg, png or jpg -";
 const COLOR_PICKER_LABEL_WIDTH = 12;
 const COLOR_PREVIEW_SIZE = 3;
+const COLOR_PREVIEW_WIDTH = COLOR_PREVIEW_SIZE * 2;
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const PACKAGE_VERSION = readPackageVersion();
 
@@ -514,7 +515,7 @@ function ColorPicker({ colors, selectedColor, theme }: { colors: string[]; selec
           <PickerColor key={color || "default"} color={color} selected={color === selectedColor} theme={theme} />
         ))}
       </Box>
-      <Box flexDirection="column" marginLeft={2}>
+      <Box flexDirection="column" marginLeft={1}>
         {colors.map((color, index) => (
           <ColorPreviewRow
             key={color || "default"}
@@ -545,13 +546,13 @@ function ColorPreviewRow({ color, showPreview, showArrow, theme }: { color: stri
   return (
     <Text>
       <Text color={showArrow ? previewColor : "gray"}>{showArrow ? "◀" : " "}</Text>
-      {showPreview ? <ColorBlock color={color} theme={theme} /> : <Text>{" ".repeat(COLOR_PREVIEW_SIZE)}</Text>}
+      {showPreview ? <ColorBlock color={color} theme={theme} /> : <Text>{" ".repeat(COLOR_PREVIEW_WIDTH)}</Text>}
     </Text>
   );
 }
 
 function ColorBlock({ color, theme }: { color: string; theme: TuiTheme }) {
-  return <Text color={color || (theme.isDark ? "#FFFFFF" : "#000000")}>{"█".repeat(COLOR_PREVIEW_SIZE)}</Text>;
+  return <Text color={color || (theme.isDark ? "#FFFFFF" : "#000000")}>{"█".repeat(COLOR_PREVIEW_WIDTH)}</Text>;
 }
 
 function ColorDot({ color, backgroundColor, blankWhenEmpty = false, theme }: { color?: string; backgroundColor?: string; blankWhenEmpty?: boolean; theme: TuiTheme }) {
