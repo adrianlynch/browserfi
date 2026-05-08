@@ -806,7 +806,7 @@ function applyIcon(bundle: ResolvedBundle): boolean {
     }
 
     if (isRasterIconPath(lowerIconPath)) {
-      const raster = prepareRasterIcon(resolved.path, bundle.iconInset);
+      const raster = prepareRasterIcon(resolved.path, bundle.iconInset, bundle.iconBackgroundColor);
       try {
         pngToIcns(raster.path, dest);
       } finally {
@@ -944,7 +944,7 @@ function prepareSvgIcon(src: string, color?: string, backgroundColor?: string, i
   return { path: dest, cleanup: () => rmSync(work, { recursive: true, force: true }) };
 }
 
-function prepareRasterIcon(src: string, inset: boolean): { path: string; cleanup?: () => void } {
+function prepareRasterIcon(src: string, inset: boolean, backgroundColor?: string): { path: string; cleanup?: () => void } {
   if (!inset) return { path: src };
 
   const work = mkdtempSync(join(tmpdir(), "browserfi-raster-icon-"));
@@ -954,7 +954,11 @@ function prepareRasterIcon(src: string, inset: boolean): { path: string; cleanup
 
   try {
     run("sips", ["-Z", String(size), src, "--out", resized], { quiet: true });
-    run("sips", ["-p", "1024", "1024", resized, "--out", padded], { quiet: true });
+    const padArgs = ["-p", "1024", "1024"];
+    if (backgroundColor) {
+      padArgs.push("--padColor", backgroundColor.replace("#", ""));
+    }
+    run("sips", [...padArgs, resized, "--out", padded], { quiet: true });
     return {
       path: padded,
       cleanup: () => rmSync(work, { recursive: true, force: true }),
