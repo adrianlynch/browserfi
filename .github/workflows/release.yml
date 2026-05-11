@@ -1,0 +1,170 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to release, for example 1.2.2 or v1.2.2.
+        required: true
+        type: string
+      publish_npm:
+        description: Publish the package to npm. Disable only when repairing a release that is already published.
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+
+env:
+  PACKAGE_NAME: "@adrianlynch/browserfi"
+  TAP_REPOSITORY: adrianlynch/homebrew-tap
+  TAP_FORMULA: Formula/browserfi.rb
+
+jobs:
+  release:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: npm
+          registry-url: https://registry.npmjs.org
+
+      - name: Resolve release version
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF}" != "refs/heads/main" ]]; then
+            echo "Release workflow must run from main." >&2
+            exit 1
+          fi
+
+          version="${{ inputs.version }}"
+          version="${version#v}"
+          tag="v${version}"
+          package_version="$(node -p "require('./package.json').version")"
+
+          if [[ "${package_version}" != "${version}" ]]; then
+            echo "package.json version ${package_version} does not match requested release ${version}." >&2
+            exit 1
+          fi
+
+          echo "VERSION=${version}" >> "${GITHUB_ENV}"
+          echo "TAG=${tag}" >> "${GITHUB_ENV}"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check
+        run: npm run check
+
+      - name: Build
+        run: npm run build
+
+      - name: Verify package contents
+        run: npm run pack:dry
+
+      - name: Ensure release tag points at this commit
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
+            tagged_sha="$(git rev-list -n 1 "${TAG}")"
+            if [[ "${tagged_sha}" != "${GITHUB_SHA}" ]]; then
+              echo "Tag ${TAG} points at ${tagged_sha}, not this workflow commit ${GITHUB_SHA}." >&2
+              exit 1
+            fi
+          else
+            git tag "${TAG}"
+            git push origin "${TAG}"
+          fi
+
+      - name: Publish to npm
+        if: ${{ inputs.publish_npm }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public
+
+      - name: Verify npm package and compute Homebrew checksum
+        run: |
+          set -euo pipefail
+          published_version="$(npm view "${PACKAGE_NAME}@${VERSION}" version)"
+          if [[ "${published_version}" != "${VERSION}" ]]; then
+            echo "npm has ${PACKAGE_NAME}@${published_version}, expected ${VERSION}." >&2
+            exit 1
+          fi
+
+          tarball_url="$(npm view "${PACKAGE_NAME}@${VERSION}" dist.tarball)"
+          tarball_path="${RUNNER_TEMP}/browserfi-${VERSION}.tgz"
+          curl --fail --location "${tarball_url}" --output "${tarball_path}"
+          sha256="$(shasum -a 256 "${tarball_path}" | awk '{print $1}')"
+
+          echo "NPM_TARBALL_URL=${tarball_url}" >> "${GITHUB_ENV}"
+          echo "NPM_TARBALL_SHA256=${sha256}" >> "${GITHUB_ENV}"
+
+      - name: Checkout Homebrew tap
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ env.TAP_REPOSITORY }}
+          path: homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+
+      - name: Update Homebrew formula
+        run: |
+          set -euo pipefail
+          formula="homebrew-tap/${TAP_FORMULA}"
+          ruby -e 'path, url, sha = ARGV; text = File.read(path); text = text.sub(/url ".*?"/, %(url "#{url}")); text = text.sub(/sha256 ".*?"/, %(sha256 "#{sha}")); File.write(path, text)' "${formula}" "${NPM_TARBALL_URL}" "${NPM_TARBALL_SHA256}"
+          git -C homebrew-tap diff -- "${TAP_FORMULA}"
+
+      - name: Test Homebrew formula
+        run: |
+          set -euo pipefail
+          brew install --formula "./homebrew-tap/${TAP_FORMULA}"
+          brew test "./homebrew-tap/${TAP_FORMULA}"
+          installed_version="$(browserfi version)"
+          if [[ "${installed_version}" != "${VERSION}" ]]; then
+            echo "Installed browserfi ${installed_version}, expected ${VERSION}." >&2
+            exit 1
+          fi
+
+      - name: Commit Homebrew tap update
+        run: |
+          set -euo pipefail
+          if git -C homebrew-tap diff --quiet -- "${TAP_FORMULA}"; then
+            echo "Homebrew formula is already current."
+            exit 0
+          fi
+
+          git -C homebrew-tap config user.name "github-actions[bot]"
+          git -C homebrew-tap config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C homebrew-tap add "${TAP_FORMULA}"
+          git -C homebrew-tap commit -m "browserfi ${VERSION}"
+          git -C homebrew-tap push origin HEAD:main
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            echo "GitHub release ${TAG} already exists."
+            exit 0
+          fi
+
+          release_notes="$(printf '%s\n' \
+            "- Published ${PACKAGE_NAME}@${VERSION} to npm." \
+            "- Updated ${TAP_REPOSITORY} with the ${VERSION} Homebrew formula." \
+            "- Verified the Homebrew formula installs and reports ${VERSION}.")"
+
+          gh release create "${TAG}" \
+            --title "${TAG}" \
+            --notes "${release_notes}"

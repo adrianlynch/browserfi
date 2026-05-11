@@ -293,6 +293,28 @@ make-bundles.sh         Legacy Bash implementation
 build-icon.sh           Legacy SVG-to-PNG icon helper
 ```
 
+## Release
+
+Releases are automated with the `Release` GitHub Actions workflow. Before
+running it, commit the version bump to `package.json` and `package-lock.json`,
+then dispatch the workflow from `main` with the same version number.
+
+The workflow:
+
+- runs the normal package checks,
+- creates `v<version>` if it does not already exist,
+- publishes `@adrianlynch/browserfi` to npm,
+- computes the npm tarball SHA-256,
+- updates `adrianlynch/homebrew-tap`,
+- installs and tests the Homebrew formula,
+- creates the GitHub release after npm and Homebrew both succeed.
+
+Required repository secrets:
+
+- `NPM_TOKEN`: npm publish token for `@adrianlynch/browserfi`
+- `HOMEBREW_TAP_TOKEN`: GitHub token with contents write access to
+  `adrianlynch/homebrew-tap`
+
 ## Caveats
 
 - Bundles are re-signed ad-hoc, so first launch may require System Settings ->
