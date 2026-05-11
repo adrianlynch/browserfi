@@ -87,6 +87,13 @@ export type BuildProgress = {
 type ListFormat = "table" | "wide" | "json" | "paths";
 type BundleOperationOptions = { quiet?: boolean; onProgress?: (progress: BuildProgress) => void };
 
+class AppPathConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AppPathConflictError";
+  }
+}
+
 const DEFAULT_CONFIG = ".browserfi.toml";
 const KEY_PATTERN = /^[A-Za-z0-9._-]+$/;
 const HEX_COLOR_PATTERN = /^#[0-9A-Fa-f]{6}$/;
@@ -325,7 +332,15 @@ function build(options: { configPath?: string; force: boolean }): void {
     console.log(`==> ${bundle.appName}`);
     let changed = false;
 
-    changed = createOrUpdateBundle(bundle, options.force);
+    try {
+      changed = createOrUpdateBundle(bundle, options.force);
+    } catch (error) {
+      if (isAppPathConflictError(error)) {
+        console.error(`warning: ${error.message}`);
+        continue;
+      }
+      throw error;
+    }
 
     if (applyIcon(bundle)) {
       console.log(`    applied icon from ${relativePath(effectiveIconIdentity(bundle) ?? join(bundle.iconsDir, `${bundle.key}.*`))}`);
@@ -766,11 +781,15 @@ function assertCanUseAppPath(bundle: ResolvedBundle): void {
   if (!existsSync(bundle.appPath)) return;
   const owner = readBrowserfiOwner(bundle.appPath);
   if (!owner) {
-    throw new Error(`App already exists and is not managed by Browserfi: ${bundle.appPath}`);
+    throw new AppPathConflictError(`App already exists and is not managed by Browserfi: ${bundle.appPath}`);
   }
   if (owner.configPath !== bundle.configPath || owner.id !== bundle.id) {
-    throw new Error(`Browserfi app already exists, delete the existing app first: ${bundle.appPath}`);
+    throw new AppPathConflictError(`Browserfi app already exists, delete the existing app first: ${bundle.appPath}`);
   }
+}
+
+function isAppPathConflictError(error: unknown): error is AppPathConflictError {
+  return error instanceof AppPathConflictError;
 }
 
 function removePreviousManagedApps(bundle: ResolvedBundle, options: BundleOperationOptions): void {

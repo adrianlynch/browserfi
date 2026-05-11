@@ -129,13 +129,13 @@ export function runTui(options: TuiOptions): Promise<void> {
     if (process.stdout.isTTY) {
       process.stdout.write("\u001b[2J\u001b[3J\u001b[H");
     }
-    const instance = render(<BrowserfiTui options={options} onDone={resolve} onError={reject} onRefresh={() => clear()} />);
+    const instance = render(<BrowserfiTui options={options} onDone={resolve} onRefresh={() => clear()} />);
     clear = instance.clear;
     instance.waitUntilExit().then(() => resolve(), reject);
   });
 }
 
-function BrowserfiTui({ options, onDone, onError, onRefresh }: { options: TuiOptions; onDone: () => void; onError: (error: unknown) => void; onRefresh: () => void }) {
+function BrowserfiTui({ options, onDone, onRefresh }: { options: TuiOptions; onDone: () => void; onRefresh: () => void }) {
   const { exit } = useApp();
   const [loaded, setLoaded] = useState(() => options.loadConfig(options.configPath));
   const [selected, setSelected] = useState(0);
@@ -161,8 +161,7 @@ function BrowserfiTui({ options, onDone, onError, onRefresh }: { options: TuiOpt
     onDone();
   };
   const handleError = (error: unknown) => {
-    setMessage(error instanceof Error ? error.message : String(error));
-    onError(error);
+    setMessage(`error: ${error instanceof Error ? error.message : String(error)}`);
   };
 
   useEffect(() => {
@@ -725,10 +724,12 @@ function Footer({ mode, hasAerospace, needsSave, needsBuild, buildProgress, spin
     <Box flexDirection="column" marginTop={1}>
       {buildProgress ? (
         <BuildProgressStatus progress={buildProgress} spinner={spinner} />
+      ) : notice ? (
+        <Text bold color={notice.startsWith("error: ") ? "red" : "green"}>{notice}</Text>
       ) : needsBuild ? (
         <Text bold color="#FFA500">Some apps need to be built (b) to build</Text>
       ) : (
-        <Text bold={Boolean(notice)} color={notice ? "green" : undefined}>{notice || " "}</Text>
+        <Text> </Text>
       )}
       {buildProgress ? <BuildProgressRule progress={buildProgress} width={rule.length} /> : <Text color="gray">{rule}</Text>}
       <Text color="gray">
