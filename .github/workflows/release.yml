@@ -128,8 +128,12 @@ jobs:
       - name: Test Homebrew formula
         run: |
           set -euo pipefail
-          brew install --formula "./homebrew-tap/${TAP_FORMULA}"
-          brew test "./homebrew-tap/${TAP_FORMULA}"
+          if brew tap | grep -qx "adrianlynch/tap"; then
+            brew untap adrianlynch/tap
+          fi
+          brew tap adrianlynch/tap "${GITHUB_WORKSPACE}/homebrew-tap"
+          brew install adrianlynch/tap/browserfi
+          brew test adrianlynch/tap/browserfi
           installed_version="$(browserfi version)"
           if [[ "${installed_version}" != "${VERSION}" ]]; then
             echo "Installed browserfi ${installed_version}, expected ${VERSION}." >&2
